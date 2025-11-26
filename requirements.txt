@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+python-jose
+passlib
+bcrypt
+python-dotenv
+python-multipart
+pyjwt
+pydantic-settings
+psycopg2
+argon2-cffi
+alembic
+# for tests
+httpx
