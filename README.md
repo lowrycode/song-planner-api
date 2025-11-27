@@ -1,19 +1,3 @@
-# Building an Authentication System
+# Song Planner API
 
-1. Database Tables
-- Docker Desktop
-- Create Database with PostgreSQL
-- Define Models: user, refresh_tokens
-- Create database tables: using ORM
-
-2. FastAPI main.py
-- CORS Middleware
-- Router for auth
-
-3. POST /register (in auth router)
-  - Schema-In: UserRegister with password validation
-  - check username not already in database
-  - hash password
-  - create user
-
-4. POST /login (in auth router)
+This project is a REST API built with FastAPI that implements role-based access control using JWT-based authentication with access and refresh tokens. It manages real data on song selections for church services across a network of churches, storing it in a PostgreSQL database. The API uses SQLAlchemy ORM with Alembic for database migrations and follows test-driven development with pytest. It was developed to deepen understanding of REST API design, modern security practices, Docker containerization, and AWS deployment.
