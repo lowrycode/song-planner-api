@@ -7,7 +7,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Text,
-    URL,
     select,
     func,
     Index,

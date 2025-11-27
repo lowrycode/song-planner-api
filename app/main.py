@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from app.exceptions import validation_exception_handler
-from app.routers import auth
+from app.routers import auth, songs
 
 app = FastAPI(
     title="Task Manager API",
@@ -29,4 +29,4 @@ def hello():
 
 
 app.include_router(auth.router, prefix="/auth")
-# app.include_router(tasks.router, prefix="/tasks")
+app.include_router(songs.router, prefix="/songs")
