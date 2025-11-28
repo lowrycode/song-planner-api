@@ -587,3 +587,82 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
         url = self._get_url(invalid_id)
         response = client.get(url, headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 422
+
+
+class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/songs/{song_id}/usages"
+
+    # Construct URL from template
+    def _get_url(self, song_id: int) -> str:
+        return self.url_template.format(song_id=song_id)
+
+    # Required for AuthTestsMixin — it needs a valid URL
+    @property
+    def url(self):
+        return self._get_url(1)
+
+    # Tests
+    def test_get_song_usages_success(self, client, db_session):
+        # Setup user and login
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        # Create song
+        song = self._create_song(db_session)
+
+        # Add usages with different dates
+        old_usage_date = datetime.now(timezone.utc) - timedelta(days=10)
+        new_usage_date = datetime.now(timezone.utc) - timedelta(days=1)
+        self._create_usage(
+            db_session, song, used_date=old_usage_date, used_at="TestPlace"
+        )
+        self._create_usage(
+            db_session, song, used_date=new_usage_date, used_at="TestPlace"
+        )
+
+        url = self._get_url(song.id)
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 2
+
+        returned_places = {u["used_at"] for u in data}
+        assert "TestPlace" in returned_places
+
+    def test_song_usages_empty_list(self, client, db_session):
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        url = self._get_url(song.id)
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_song_usages_song_not_found(self, client, db_session):
+        # Setup user and login
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        invalid_id = 999999
+        url = self._get_url(invalid_id)
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Song not found"
+
+    def test_get_song_usages_invalid_id_validation(self, client, db_session):
+        # Setup user and login
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        invalid_id = "notanumber"
+        url = self._get_url(invalid_id)
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 422

@@ -4,7 +4,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Song, SongLyrics, SongUsage, UserRole, User
-from app.schemas.songs import SongListFilters, SongBasicDetails, SongFullDetails
+from app.schemas.songs import (
+    SongListFilters,
+    SongBasicDetails,
+    SongFullDetails,
+    SongUsageSchema,
+)
 from app.dependencies import require_min_role
 
 router = APIRouter()
@@ -38,9 +43,11 @@ def list_songs(
     if filter_query.used_at is not None:
         # distinct is not strictly necessary when using last_used column property
         # in Song model
-        query = query.join(SongUsage).filter(
-            SongUsage.used_at.in_(filter_query.used_at)
-        ).distinct()
+        query = (
+            query.join(SongUsage)
+            .filter(SongUsage.used_at.in_(filter_query.used_at))
+            .distinct()
+        )
 
     return query.all()
 
@@ -65,3 +72,17 @@ def song_full_details(
         raise HTTPException(status_code=404, detail="Song not found")
 
     return song
+
+
+@router.get("/{song_id}/usages", status_code=200, response_model=list[SongUsageSchema])
+def song_usages(
+    song_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+    # Ensure song exists
+    if not db.query(Song.id).filter(Song.id == song_id).first():
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    # Return all usage records
+    return db.query(SongUsage).filter(SongUsage.song_id == song_id).all()
