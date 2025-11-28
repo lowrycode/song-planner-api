@@ -658,3 +658,92 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
         response = client.get(url, headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 422
+
+    def test_filter_used_after(self, client, db_session):
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        old_date = datetime.now(timezone.utc) - timedelta(days=10)
+        new_date = datetime.now(timezone.utc) - timedelta(days=1)
+        self._create_usage(db_session, song, used_date=old_date, used_at="PlaceA")
+        self._create_usage(db_session, song, used_date=new_date, used_at="PlaceB")
+
+        params = {
+            "used_after": (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        }
+        url = f"{self._get_url(song.id)}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+
+        data = response.json()
+        assert all(
+            datetime.fromisoformat(u["used_date"])
+            >= datetime.fromisoformat(params["used_after"])
+            for u in data
+        )
+        # Only the new_date usage should be included
+        assert any(u["used_at"] == "PlaceB" for u in data)
+        assert all(u["used_at"] != "PlaceA" for u in data)
+
+    def test_filter_used_before(self, client, db_session):
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        old_date = datetime.now(timezone.utc) - timedelta(days=10)
+        new_date = datetime.now(timezone.utc) - timedelta(days=1)
+        self._create_usage(db_session, song, used_date=old_date, used_at="PlaceA")
+        self._create_usage(db_session, song, used_date=new_date, used_at="PlaceB")
+
+        params = {
+            "used_before": (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+        }
+        url = f"{self._get_url(song.id)}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+
+        data = response.json()
+        assert all(
+            datetime.fromisoformat(u["used_date"])
+            <= datetime.fromisoformat(params["used_before"])
+            for u in data
+        )
+        # Only the old_date usage should be included
+        assert any(u["used_at"] == "PlaceA" for u in data)
+        assert all(u["used_at"] != "PlaceB" for u in data)
+
+    def test_filter_used_at(self, client, db_session):
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        self._create_usage(
+            db_session, song, used_date=datetime.now(timezone.utc), used_at="PlaceA"
+        )
+        self._create_usage(
+            db_session, song, used_date=datetime.now(timezone.utc), used_at="PlaceB"
+        )
+        self._create_usage(
+            db_session, song, used_date=datetime.now(timezone.utc), used_at="PlaceC"
+        )
+
+        params = [
+            ("used_at", "PlaceA"),
+            ("used_at", "PlaceC"),
+        ]  # multiple values for used_at
+        query_string = urlencode(params)
+        url = f"{self._get_url(song.id)}?{query_string}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+
+        data = response.json()
+        returned_places = {u["used_at"] for u in data}
+        assert returned_places == {"PlaceA", "PlaceC"}
+        assert "PlaceB" not in returned_places

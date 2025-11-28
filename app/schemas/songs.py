@@ -62,3 +62,9 @@ class SongListFilters(BaseModel):
     last_used_after: datetime | None = None
     last_used_before: datetime | None = None
     used_at: list[str] | None = None
+
+
+class SongUsageFilters(BaseModel):
+    used_after: datetime | None = None
+    used_before: datetime | None = None
+    used_at: list[str] | None = None

@@ -9,6 +9,7 @@ from app.schemas.songs import (
     SongBasicDetails,
     SongFullDetails,
     SongUsageSchema,
+    SongUsageFilters
 )
 from app.dependencies import require_min_role
 
@@ -77,6 +78,7 @@ def song_full_details(
 @router.get("/{song_id}/usages", status_code=200, response_model=list[SongUsageSchema])
 def song_usages(
     song_id: int,
+    filters: Annotated[SongUsageFilters, Query()],
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
@@ -84,5 +86,14 @@ def song_usages(
     if not db.query(Song.id).filter(Song.id == song_id).first():
         raise HTTPException(status_code=404, detail="Song not found")
 
-    # Return all usage records
-    return db.query(SongUsage).filter(SongUsage.song_id == song_id).all()
+    query = db.query(SongUsage).filter(SongUsage.song_id == song_id)
+
+    # Apply filters
+    if filters.used_after:
+        query = query.filter(SongUsage.used_date >= filters.used_after)
+    if filters.used_before:
+        query = query.filter(SongUsage.used_date <= filters.used_before)
+    if filters.used_at:
+        query = query.filter(SongUsage.used_at.in_(filters.used_at))
+
+    return query.all()
