@@ -281,16 +281,12 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         # Add usages with different dates
         old_usage_date = datetime.now(timezone.utc) - timedelta(days=10)
         new_usage_date = datetime.now(timezone.utc) - timedelta(days=1)
-
-        song_usage_old = SongUsage(
-            song_id=song_old.id, used_date=old_usage_date, used_at="TestPlace"
+        self._create_usage(
+            db_session, song_old, used_date=old_usage_date, used_at="TestPlace"
         )
-        song_usage_new = SongUsage(
-            song_id=song_new.id, used_date=new_usage_date, used_at="TestPlace"
+        self._create_usage(
+            db_session, song_new, used_date=new_usage_date, used_at="TestPlace"
         )
-
-        db_session.add_all([song_usage_old, song_usage_new])
-        db_session.commit()
 
         # Define filter date
         filter_after = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
@@ -329,16 +325,12 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         # Add usages with different dates
         old_usage_date = datetime.now(timezone.utc) - timedelta(days=10)
         new_usage_date = datetime.now(timezone.utc) - timedelta(days=1)
-
-        song_usage_old = SongUsage(
-            song_id=song_old.id, used_date=old_usage_date, used_at="TestPlace"
+        self._create_usage(
+            db_session, song_old, used_date=old_usage_date, used_at="TestPlace"
         )
-        song_usage_new = SongUsage(
-            song_id=song_new.id, used_date=new_usage_date, used_at="TestPlace"
+        self._create_usage(
+            db_session, song_new, used_date=new_usage_date, used_at="TestPlace"
         )
-
-        db_session.add_all([song_usage_old, song_usage_new])
-        db_session.commit()
 
         # Define filter date (future to include both)
         filter_before = (datetime.now(timezone.utc) + timedelta(days=1)).isoformat()
