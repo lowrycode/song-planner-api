@@ -103,10 +103,10 @@ class Song(Base):
         "SongUsage", back_populates="song", cascade="all, delete-orphan"
     )
     lyrics = relationship(
-        "SongLyrics", back_populates="song", cascade="all, delete-orphan"
+        "SongLyrics", back_populates="song", uselist=False, cascade="all, delete-orphan"
     )
     resources = relationship(
-        "SongResources", back_populates="song", cascade="all, delete-orphan"
+        "SongResources", back_populates="song", uselist=False, cascade="all, delete-orphan"
     )
 
     def __repr__(self):
@@ -117,7 +117,7 @@ class SongLyrics(Base):
     __tablename__ = "song_lyrics"
 
     id = Column(Integer, primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
+    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False, unique=True)
     content = Column(Text, nullable=False)
 
     # Relationship to Song
@@ -131,7 +131,7 @@ class SongResources(Base):
     __tablename__ = "song_resources"
 
     id = Column(Integer, primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
+    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False, unique=True)
     sheet_music = Column(String, nullable=True)
     harmony_vid = Column(String, nullable=True)
     harmony_pdf = Column(String, nullable=True)
