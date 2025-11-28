@@ -2,9 +2,11 @@ from datetime import datetime
 from pydantic import BaseModel, HttpUrl, ConfigDict
 
 
-class SongUsage(BaseModel):
+class SongUsageSchema(BaseModel):
+    id: int
     used_date: datetime
     used_at: str
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SongBasicDetails(BaseModel):
@@ -14,12 +16,24 @@ class SongBasicDetails(BaseModel):
     is_hymn: bool
     created_on: datetime
     last_used: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
 
+
+class SongLyricsSchema(BaseModel):
+    content: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SongResourcesSchema(BaseModel):
+    sheet_music: HttpUrl | None = None
+    harmony_vid: HttpUrl | None = None
+    harmony_pdf: HttpUrl | None = None
+    harmony_ms: HttpUrl | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
 class SongFullDetails(BaseModel):
-    song_id: int
+    id: int
     first_line: str
     song_key: str
     is_hymn: bool
@@ -27,12 +41,16 @@ class SongFullDetails(BaseModel):
     author: str | None = None
     duration: int | None = None
     created_on: datetime
-    lyrics: str
-    usage: list[SongUsage]
-    sheet_music: HttpUrl
-    harmony_video: HttpUrl | None = None
-    harmony_pdf: HttpUrl | None = None
-    harmony_ms: HttpUrl | None = None
+    last_used: datetime | None = None
+    lyrics: SongLyricsSchema
+    resources: SongResourcesSchema
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SongUsageList(BaseModel):
+    id: int
+    usages: list[SongUsageSchema]
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SongListFilters(BaseModel):

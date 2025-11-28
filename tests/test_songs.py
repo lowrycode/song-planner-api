@@ -1,11 +1,14 @@
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlencode
-from app.models import Song, SongLyrics, SongUsage, User, UserRole
+from app.models import Song, SongLyrics, SongUsage, SongResources, User, UserRole
 from app.utils.auth import hash_password
 from pprint import pprint
 
 
 class BaseTestHelpers:
+    username = "testuser"
+    password = "password123"
+
     # --- Helper Methods for Test Setup ---
     def _create_user(self, db_session, username, password, role=UserRole.normal):
         hashed = hash_password(password)
@@ -45,6 +48,27 @@ class BaseTestHelpers:
         db_session.refresh(lyrics)
         return lyrics
 
+    def _create_resources(
+        self,
+        db_session,
+        song,
+        sheet_music=None,
+        harmony_vid=None,
+        harmony_pdf=None,
+        harmony_ms=None,
+    ):
+        resources = SongResources(
+            song_id=song.id,
+            sheet_music=sheet_music,
+            harmony_vid=harmony_vid,
+            harmony_pdf=harmony_pdf,
+            harmony_ms=harmony_ms,
+        )
+        db_session.add(resources)
+        db_session.commit()
+        db_session.refresh(resources)
+        return resources
+
     def _create_usage(self, db_session, song, used_date=None, used_at="default_place"):
         if used_date is None:
             used_date = datetime.now(timezone.utc)
@@ -69,7 +93,7 @@ class AuthTestsMixin:
         )
         assert response.status_code == 401
 
-    def test_unauthorized_role(self, client, db_session):
+    def test_unapproved_role(self, client, db_session):
         # Create user with insufficient role
         self._create_user(
             db_session,
@@ -79,15 +103,13 @@ class AuthTestsMixin:
         )
         token = self._get_access_token_from_login(client, self.username, self.password)
 
-        # Request with valid token but unauthorized role
+        # Request with valid token but unapproved role
         response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 403  # Forbidden
 
 
 class TestListSongs(BaseTestHelpers, AuthTestsMixin):
     url = "/songs"
-    username = "testuser"
-    password = "password123"
 
     # --- Test Filters ---
     def test_list_songs_no_filters(self, client, db_session):
@@ -501,3 +523,67 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
         # FastAPI by default ignores unknown query params, so usually 200
         assert response.status_code == 200
+
+
+class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/songs/{song_id}"
+
+    # Construct url from template
+    def _get_url(self, song_id: int) -> str:
+        return self.url_template.format(song_id=song_id)
+
+    # Required for tests in AuthTestMixin - returns a dummy URL
+    @property
+    def url(self):
+        return self._get_url(1)
+
+    # Tests
+    def test_get_song_full_details_success(self, client, db_session):
+        # Setup user and login
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        # Create song with lyrics and resources (one-to-one)
+        song = self._create_song(db_session)
+        self._create_lyrics(db_session, song, content="Test lyrics")
+        resources = self._create_resources(db_session, song)
+        db_session.add(resources)
+        db_session.commit()
+        db_session.refresh(resources)
+
+        url = self._get_url(song.id)
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == song.id
+        assert "lyrics" in data and data["lyrics"]["content"] == "Test lyrics"
+        assert "resources" in data
+        assert "sheet_music" in data["resources"]
+        assert "harmony_vid" in data["resources"]
+        assert "harmony_pdf" in data["resources"]
+        assert "harmony_ms" in data["resources"]
+
+    def test_get_song_full_details_not_found(self, client, db_session):
+        # Setup user and login
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        # Use an invalid/nonexistent song_id
+        invalid_id = 999999
+        url = self._get_url(invalid_id)
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Song not found"
+
+    def test_song_id_validation_error(self, client, db_session):
+        # Setup user and login
+        self._create_user(db_session, username=self.username, password=self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        invalid_id = "notanumber"
+        url = self._get_url(invalid_id)
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 422

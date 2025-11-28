@@ -1,10 +1,10 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Song, SongLyrics, SongUsage, UserRole, User
-from app.schemas.songs import SongListFilters, SongBasicDetails
+from app.schemas.songs import SongListFilters, SongBasicDetails, SongFullDetails
 from app.dependencies import require_min_role
 
 router = APIRouter()
@@ -43,3 +43,25 @@ def list_songs(
         ).distinct()
 
     return query.all()
+
+
+@router.get("/{song_id}", status_code=200, response_model=SongFullDetails)
+def song_full_details(
+    song_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+    song = (
+        db.query(Song)
+        .options(
+            joinedload(Song.lyrics),
+            joinedload(Song.resources),
+        )
+        .filter(Song.id == song_id)
+        .first()
+    )
+
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    return song
