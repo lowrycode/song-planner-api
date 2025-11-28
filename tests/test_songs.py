@@ -5,12 +5,8 @@ from app.utils.auth import hash_password
 from pprint import pprint
 
 
-class TestListSongs:
-    url = "/songs"
-    username = "testuser"
-    password = "password123"
-
-    # --- Helper Methods ---
+class BaseTestHelpers:
+    # --- Helper Methods for Test Setup ---
     def _create_user(self, db_session, username, password, role=UserRole.normal):
         hashed = hash_password(password)
         user = User(username=username, hashed_password=hashed, role=role)
@@ -58,7 +54,42 @@ class TestListSongs:
         db_session.refresh(usage)
         return usage
 
-    # --- Tests ---
+
+class AuthTestsMixin:
+
+    def test_unauthorized_access_no_token(self, client):
+        # No token provided
+        response = client.get(self.url)
+        assert response.status_code == 401
+
+    def test_unauthorized_access_invalid_token(self, client):
+        # Invalid token provided
+        response = client.get(
+            self.url, headers={"Authorization": "Bearer invalidtoken"}
+        )
+        assert response.status_code == 401
+
+    def test_unauthorized_role(self, client, db_session):
+        # Create user with insufficient role
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            role=UserRole.unapproved,
+        )
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        # Request with valid token but unauthorized role
+        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 403  # Forbidden
+
+
+class TestListSongs(BaseTestHelpers, AuthTestsMixin):
+    url = "/songs"
+    username = "testuser"
+    password = "password123"
+
+    # --- Test Filters ---
     def test_list_songs_no_filters(self, client, db_session):
         # Setup
         self._create_user(db_session, username=self.username, password=self.password)
@@ -437,6 +468,7 @@ class TestListSongs:
         assert all(s["id"] != song_no_match_key.id for s in data)
         assert all(s["id"] != song_no_match_hymn.id for s in data)
 
+    # --- Test Edge Cases ---
     def test_no_songs_meet_criteria(self, client, db_session):
         # Setup: create user but no songs created
         self._create_user(db_session, username=self.username, password=self.password)
@@ -455,32 +487,6 @@ class TestListSongs:
         data = response.json()
         assert isinstance(data, list)
         assert len(data) == 0
-
-    def test_unauthorized_access_no_token(self, client):
-        # No token provided
-        response = client.get(self.url)
-        assert response.status_code == 401
-
-    def test_unauthorized_access_invalid_token(self, client):
-        # Invalid token provided
-        response = client.get(
-            self.url, headers={"Authorization": "Bearer invalidtoken"}
-        )
-        assert response.status_code == 401
-
-    def test_unauthorized_role(self, client, db_session):
-        # Create user with insufficient role
-        self._create_user(
-            db_session,
-            username=self.username,
-            password=self.password,
-            role=UserRole.unapproved,
-        )
-        token = self._get_access_token_from_login(client, self.username, self.password)
-
-        # Request with valid token but unauthorized role
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
-        assert response.status_code == 403  # Forbidden
 
     def test_unknown_query_parameter(self, client, db_session):
         # Setup
