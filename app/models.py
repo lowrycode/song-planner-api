@@ -5,13 +5,13 @@ from sqlalchemy import (
     String,
     Boolean,
     DateTime,
+    Date,
     ForeignKey,
     Text,
-    select,
-    func,
     Index,
+    UniqueConstraint,
 )
-from sqlalchemy.orm import relationship, column_property
+from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
 
@@ -62,13 +62,14 @@ class SongUsage(Base):
 
     id = Column(Integer, primary_key=True)
     song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
-    used_date = Column(DateTime(timezone=True), nullable=False)
+    used_date = Column(Date, nullable=False)
     used_at = Column(String(15), nullable=False)
 
     __table_args__ = (
         Index("idx_songusage_song_id", "song_id"),
         Index("idx_songusage_songid_date", "song_id", "used_date"),
         Index("idx_songusage_used_date", "used_date"),
+        Index("idx_songusage_song_venue_date", "song_id", "used_at", "used_date"),
     )
 
     # Relationship to Song
@@ -76,6 +77,34 @@ class SongUsage(Base):
 
     def __repr__(self):
         return f"<SongUsage(id={self.id}, song_id={self.song_id}, used_date={self.used_date}, used_at='{self.used_at}')>"
+
+
+class SongUsageStats(Base):
+    __tablename__ = "song_usage_stats"
+
+    id = Column(Integer, primary_key=True)
+    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
+    used_at = Column(String(15), nullable=False)
+    first_used = Column(Date, nullable=False)
+    last_used = Column(Date, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("song_id", "used_at", name="uq_song_usage_stats_song_venue"),
+        Index("idx_song_usage_stats_song", "song_id"),
+        Index("idx_song_usage_stats_used_at", "used_at"),
+    )
+
+    # Relationship to Song
+    song = relationship("Song", back_populates="usage_stats")
+
+    def __repr__(self):
+        return (
+            f"<SongUsageStats("
+            f"song_id={self.song_id}, "
+            f"used_at='{self.used_at}', "
+            f"first_used={self.first_used}, "
+            f"last_used={self.last_used})>"
+        )
 
 
 class Song(Base):
@@ -88,25 +117,22 @@ class Song(Base):
     copyright = Column(String(255), nullable=True)
     author = Column(String(150), nullable=True)
     duration = Column(Integer, nullable=False, default=0)
-    created_on = Column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-    last_used = column_property(
-        select(func.max(SongUsage.used_date))
-        .where(SongUsage.song_id == id)
-        .correlate_except(SongUsage)
-        .scalar_subquery()
-    )
 
     # Relationship to SongUsage
     usages = relationship(
         "SongUsage", back_populates="song", cascade="all, delete-orphan"
     )
+    usage_stats = relationship(
+        "SongUsageStats", back_populates="song", cascade="all, delete-orphan"
+    )
     lyrics = relationship(
         "SongLyrics", back_populates="song", uselist=False, cascade="all, delete-orphan"
     )
     resources = relationship(
-        "SongResources", back_populates="song", uselist=False, cascade="all, delete-orphan"
+        "SongResources",
+        back_populates="song",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self):
