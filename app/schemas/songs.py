@@ -1,24 +1,15 @@
-from datetime import datetime
+from datetime import date
 from pydantic import BaseModel, HttpUrl, ConfigDict
+from enum import Enum
 
 
-class SongUsageSchema(BaseModel):
-    id: int
-    used_date: datetime
-    used_at: str
-    model_config = ConfigDict(from_attributes=True)
+# Enums
+class SongType(str, Enum):
+    song = "song"
+    hymn = "hymn"
 
 
-class SongBasicDetails(BaseModel):
-    id: int
-    first_line: str
-    song_key: str
-    is_hymn: bool
-    created_on: datetime
-    last_used: datetime | None = None
-    model_config = ConfigDict(from_attributes=True)
-
-
+# Dependency Schemas
 class SongLyricsSchema(BaseModel):
     content: str
     model_config = ConfigDict(from_attributes=True)
@@ -32,6 +23,53 @@ class SongResourcesSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ActivityUsageStats(BaseModel):
+    id: int
+    name: str
+    usage_count: int
+    first_used: date | None = None
+    last_used: date | None = None
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OverallActivityUsageStats(BaseModel):
+    usage_count: int
+    first_used: date | None
+    last_used: date | None
+    model_config = ConfigDict(from_attributes=True)
+
+
+# Filter Query Schemas
+class SongListFilters(BaseModel):
+    song_key: str | None = None
+    song_type: SongType | None = None
+    lyric: str | None = None
+
+
+class SongUsageFilters(BaseModel):
+    used_after: date | None = None
+    used_before: date | None = None
+    church_activity_id: list[int] | None = None
+
+
+class SongListUsageFilters(BaseModel):
+    from_date: date | None = None
+    to_date: date | None = None
+    lyric: str | None = None
+    song_key: str | None = None
+    song_type: SongType | None = None
+    last_used_in_range: bool = False
+    first_used_in_range: bool = False
+    church_activity_id: list[int] | None = None
+
+
+# Response Schemas
+class SongBasicDetails(BaseModel):
+    id: int
+    first_line: str
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SongFullDetails(BaseModel):
     id: int
     first_line: str
@@ -40,31 +78,21 @@ class SongFullDetails(BaseModel):
     copyright: str | None = None
     author: str | None = None
     duration: int | None = None
-    created_on: datetime
-    last_used: datetime | None = None
     lyrics: SongLyricsSchema
     resources: SongResourcesSchema
     model_config = ConfigDict(from_attributes=True)
 
 
-class SongUsageList(BaseModel):
+class SongUsageSchema(BaseModel):
     id: int
-    usages: list[SongUsageSchema]
+    used_date: date
+    church_activity_id: int
     model_config = ConfigDict(from_attributes=True)
 
 
-class SongListFilters(BaseModel):
-    song_key: str | None = None
-    is_hymn: bool | None = None
-    added_after: datetime | None = None
-    added_before: datetime | None = None
-    lyrics: str | None = None
-    last_used_after: datetime | None = None
-    last_used_before: datetime | None = None
-    used_at: list[str] | None = None
-
-
-class SongUsageFilters(BaseModel):
-    used_after: datetime | None = None
-    used_before: datetime | None = None
-    used_at: list[str] | None = None
+class SongListUsageResponse(BaseModel):
+    id: int
+    first_line: str
+    activities: dict[str, ActivityUsageStats]
+    overall: OverallActivityUsageStats
+    model_config = ConfigDict(from_attributes=True)

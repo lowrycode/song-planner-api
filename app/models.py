@@ -23,6 +23,11 @@ class UserRole(enum.IntEnum):
     admin = 3
 
 
+class ActivityType(enum.IntEnum):
+    service = 0
+    other = 1
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -39,14 +44,16 @@ class User(Base):
     )
 
     def __repr__(self):
-        return f"User id={self.id} username={self.username} hashed_pwd={self.hashed_password}"
+        return f"User id={self.id} username={self.username}"
 
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
     token_hash = Column(String(255), nullable=False)
     revoked = Column(Boolean, default=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
@@ -61,47 +68,69 @@ class SongUsage(Base):
     __tablename__ = "song_usage"
 
     id = Column(Integer, primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
+    song_id = Column(
+        Integer, ForeignKey("songs.id", ondelete="CASCADE"), nullable=False
+    )
     used_date = Column(Date, nullable=False)
-    used_at = Column(String(15), nullable=False)
+    church_activity_id = Column(
+        Integer, ForeignKey("church_activites.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Relationships
+    song = relationship("Song", back_populates="usages")
+    church_activity = relationship("ChurchActivity", back_populates="song_usages")
 
     __table_args__ = (
         Index("idx_songusage_song_id", "song_id"),
-        Index("idx_songusage_songid_date", "song_id", "used_date"),
-        Index("idx_songusage_used_date", "used_date"),
-        Index("idx_songusage_song_venue_date", "song_id", "used_at", "used_date"),
+        Index("idx_songusage_activity_date", "church_activity_id", "used_date"),
+        Index(
+            "idx_songusage_song_activity_date",
+            "song_id",
+            "church_activity_id",
+            "used_date",
+        ),
     )
 
-    # Relationship to Song
-    song = relationship("Song", back_populates="usages")
-
     def __repr__(self):
-        return f"<SongUsage(id={self.id}, song_id={self.song_id}, used_date={self.used_date}, used_at='{self.used_at}')>"
+        return (
+            f"<SongUsage(id={self.id}, song_id={self.song_id}, "
+            f"used_date={self.used_date}, "
+            f"church_activity_id={self.church_activity_id})>"
+        )
 
 
 class SongUsageStats(Base):
     __tablename__ = "song_usage_stats"
 
     id = Column(Integer, primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False)
-    used_at = Column(String(15), nullable=False)
+    song_id = Column(
+        Integer, ForeignKey("songs.id", ondelete="CASCADE"), nullable=False
+    )
+    church_activity_id = Column(
+        Integer, ForeignKey("church_activites.id", ondelete="CASCADE"), nullable=False
+    )
     first_used = Column(Date, nullable=False)
     last_used = Column(Date, nullable=False)
 
-    __table_args__ = (
-        UniqueConstraint("song_id", "used_at", name="uq_song_usage_stats_song_venue"),
-        Index("idx_song_usage_stats_song", "song_id"),
-        Index("idx_song_usage_stats_used_at", "used_at"),
-    )
-
-    # Relationship to Song
+    # Relationships
     song = relationship("Song", back_populates="usage_stats")
+    church_activity = relationship("ChurchActivity", back_populates="usage_stats")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "song_id",
+            "church_activity_id",
+            name="uq_song_usage_stats_song_activity",
+        ),
+        Index("idx_song_usage_stats_song", "song_id"),
+        Index("idx_song_usage_stats_activity", "church_activity_id"),
+    )
 
     def __repr__(self):
         return (
             f"<SongUsageStats("
             f"song_id={self.song_id}, "
-            f"used_at='{self.used_at}', "
+            f"church_activity_id={self.church_activity_id}, "
             f"first_used={self.first_used}, "
             f"last_used={self.last_used})>"
         )
@@ -118,7 +147,7 @@ class Song(Base):
     author = Column(String(150), nullable=True)
     duration = Column(Integer, nullable=False, default=0)
 
-    # Relationship to SongUsage
+    # Relationships
     usages = relationship(
         "SongUsage", back_populates="song", cascade="all, delete-orphan"
     )
@@ -143,21 +172,28 @@ class SongLyrics(Base):
     __tablename__ = "song_lyrics"
 
     id = Column(Integer, primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False, unique=True)
+    song_id = Column(
+        Integer, ForeignKey("songs.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
     content = Column(Text, nullable=False)
 
     # Relationship to Song
     song = relationship("Song", back_populates="lyrics")
 
     def __repr__(self):
-        return f"<SongLyrics(id={self.id}, song_id={self.song_id}, content='{self.content[:10]}...')>"
+        return (
+            f"<SongLyrics(id={self.id}, song_id={self.song_id}, "
+            f"content='{self.content[:10]}...')>"
+        )
 
 
 class SongResources(Base):
     __tablename__ = "song_resources"
 
     id = Column(Integer, primary_key=True)
-    song_id = Column(Integer, ForeignKey("songs.id"), nullable=False, unique=True)
+    song_id = Column(
+        Integer, ForeignKey("songs.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
     sheet_music = Column(String, nullable=True)
     harmony_vid = Column(String, nullable=True)
     harmony_pdf = Column(String, nullable=True)
@@ -172,3 +208,63 @@ class SongResources(Base):
             f"sheet_music='{self.sheet_music}', harmony_vid='{self.harmony_vid}', "
             f"harmony_pdf='{self.harmony_pdf}', harmony_ms='{self.harmony_ms}')>"
         )
+
+
+class Network(Base):
+    __tablename__ = "networks"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(200), nullable=False)
+
+    # Relationship to churches
+    churches = relationship(
+        "Church", back_populates="network", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<Network id={self.id} name={self.name}>"
+
+
+class Church(Base):
+    __tablename__ = "churches"
+
+    id = Column(Integer, primary_key=True)
+    network_id = Column(
+        Integer, ForeignKey("networks.id", ondelete="CASCADE"), nullable=False
+    )
+    name = Column(String(20), nullable=False)
+    slug = Column(String(20), nullable=False)
+
+    # Relationships
+    network = relationship("Network", back_populates="churches")
+    activities = relationship(
+        "ChurchActivity", back_populates="church", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self):
+        return f"<Church id={self.id} network_id={self.network_id} name={self.name}>"
+
+
+class ChurchActivity(Base):
+    __tablename__ = "church_activites"
+    __table_args__ = (
+        UniqueConstraint("church_id", "slug", name="uq_church_activity_slug"),
+        UniqueConstraint("church_id", "name", name="uq_church_activity_name"),
+        Index("idx_church_activity_church", "church_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    church_id = Column(
+        Integer, ForeignKey("churches.id", ondelete="CASCADE"), nullable=False
+    )
+    name = Column(String(50), nullable=False)
+    slug = Column(String(50), nullable=False)
+    type = Column(Integer, default=ActivityType.service, nullable=False)
+
+    # Relationship to Church
+    church = relationship("Church", back_populates="activities")
+    song_usages = relationship("SongUsage", back_populates="church_activity")
+    usage_stats = relationship("SongUsageStats", back_populates="church_activity")
+
+    def __repr__(self):
+        return f"<ChurchActivity id={self.id} name={self.name}>"
