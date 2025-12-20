@@ -24,7 +24,6 @@ from app.schemas.songs import (
     ActivityUsageStats,
     OverallActivityUsageStats,
     SongKeyFilters,
-    SongKeyResponse,
     SongTypeFilters,
     SongTypeResponse,
 )
@@ -62,7 +61,7 @@ def list_songs(
     return query.all()
 
 
-@router.get("/key-summary", status_code=200, response_model=list[SongKeyResponse])
+@router.get("/key-summary", status_code=200, response_model=dict[str, int])
 def song_keys_overview(
     filter_query: Annotated[SongKeyFilters, Query()],
     db: Session = Depends(get_db),
@@ -111,7 +110,10 @@ def song_keys_overview(
         .group_by(Song.song_key)
         .order_by(count_expr.desc())
     )
-    return query.all()
+
+    results = query.all()
+    response = {song_key: count for song_key, count in results}
+    return response
 
 
 @router.get("/type-summary", status_code=200, response_model=SongTypeResponse)

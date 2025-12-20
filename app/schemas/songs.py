@@ -84,12 +84,6 @@ class SongBasicDetails(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class SongKeyResponse(BaseModel):
-    song_key: str
-    count: int
-    model_config = ConfigDict(from_attributes=True)
-
-
 class SongTypeResponse(BaseModel):
     hymn: int
     song: int
