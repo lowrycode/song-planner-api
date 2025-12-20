@@ -1027,3 +1027,183 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         # With unique true, count counts distinct songs,
         # so usage count = 1 for song_key C
         assert any(d["song_key"] == "C" and d["count"] == 1 for d in data)
+
+
+class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
+    url = "/songs/type-summary"
+
+    def test_get_type_summary_success(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        hymn_song = self._create_song(db_session, is_hymn=True)
+        normal_song = self._create_song(db_session, is_hymn=False)
+
+        # Usage for hymn: 2 usages
+        self._create_usage(db_session, hymn_song, activity)
+        self._create_usage(db_session, hymn_song, activity)
+        self._create_usage_stats(
+            db_session, hymn_song, activity, date.today(), date.today()
+        )
+
+        # Usage for normal song: 1 usage
+        self._create_usage(db_session, normal_song, activity)
+        self._create_usage_stats(
+            db_session, normal_song, activity, date.today(), date.today()
+        )
+
+        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should be a dict with 'hymn' and 'song'
+        assert "hymn" in data and "song" in data
+        assert data["hymn"] == 2
+        assert data["song"] == 1
+
+    def test_filter_from_date(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        hymn_song = self._create_song(db_session, is_hymn=True)
+
+        old_date = date.today() - timedelta(days=10)
+        new_date = date.today() - timedelta(days=2)
+
+        self._create_usage(db_session, hymn_song, activity, old_date)
+        self._create_usage(db_session, hymn_song, activity, new_date)
+        self._create_usage_stats(db_session, hymn_song, activity, old_date, new_date)
+
+        params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["hymn"] == 1  # Only the usage after from_date counts
+        assert data["song"] == 0  # No normal songs used
+
+    def test_filter_to_date(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        normal_song = self._create_song(db_session, is_hymn=False)
+
+        old_date = date.today() - timedelta(days=10)
+        new_date = date.today() - timedelta(days=1)
+
+        self._create_usage(db_session, normal_song, activity, old_date)
+        self._create_usage(db_session, normal_song, activity, new_date)
+        self._create_usage_stats(db_session, normal_song, activity, old_date, new_date)
+
+        params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["song"] == 1  # Only usage before to_date counts
+        assert data["hymn"] == 0  # No hymns used
+
+    def test_filter_church_activity_id_multiple(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        activity1 = self._create_church_activity(
+            db_session,
+            church,
+            church_activity_name="Activity One",
+            church_activity_slug="activity_one",
+        )
+        activity2 = self._create_church_activity(
+            db_session,
+            church,
+            church_activity_name="Activity Two",
+            church_activity_slug="activity_two",
+        )
+
+        hymn_song = self._create_song(db_session, is_hymn=True)
+        normal_song = self._create_song(db_session, is_hymn=False)
+
+        self._create_usage(db_session, hymn_song, activity1)
+        self._create_usage(db_session, normal_song, activity2)
+
+        self._create_usage_stats(
+            db_session, hymn_song, activity1, date.today(), date.today()
+        )
+        self._create_usage_stats(
+            db_session, normal_song, activity2, date.today(), date.today()
+        )
+
+        params = [
+            ("church_activity_id", activity1.id),
+        ]
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["hymn"] == 1  # Only usage from activity1 counted
+        assert data["song"] == 0
+
+    def test_unique_true_counts_distinct_songs(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        hymn_song1 = self._create_song(db_session, is_hymn=True)
+        hymn_song2 = self._create_song(db_session, is_hymn=True)
+
+        # Multiple usages of hymn_song1
+        self._create_usage(db_session, hymn_song1, activity)
+        self._create_usage(db_session, hymn_song1, activity)
+
+        # Single usage of hymn_song2
+        self._create_usage(db_session, hymn_song2, activity)
+
+        self._create_usage_stats(
+            db_session, hymn_song1, activity, date.today(), date.today()
+        )
+        self._create_usage_stats(
+            db_session, hymn_song2, activity, date.today(), date.today()
+        )
+
+        params = {"unique": "true"}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+
+        # Count distinct songs, so 2 hymns total
+        assert data["hymn"] == 2
+
+    def test_no_usage_returns_zero_counts(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["hymn"] == 0
+        assert data["song"] == 0

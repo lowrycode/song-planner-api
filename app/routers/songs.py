@@ -25,6 +25,8 @@ from app.schemas.songs import (
     OverallActivityUsageStats,
     SongKeyFilters,
     SongKeyResponse,
+    SongTypeFilters,
+    SongTypeResponse,
 )
 from app.dependencies import require_min_role
 from datetime import date
@@ -110,6 +112,64 @@ def song_keys_overview(
         .order_by(count_expr.desc())
     )
     return query.all()
+
+
+@router.get("/type-summary", status_code=200, response_model=SongTypeResponse)
+def song_type_overview(
+    filter_query: Annotated[SongTypeFilters, Query()],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+
+    # Default filters
+    usage_filters = []
+
+    # Role based filters
+    # This approach breaks tests due to primary key auto-increment behaviour!
+    # allowed_activity_ids = [0, 1, 2, 3]
+    # Temp allow large range of numbers
+    allowed_activity_ids = [n for n in range(100)]
+    usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
+
+    # Activity filters
+    allowed_activites = allowed_activity_ids
+    if filter_query.church_activity_id:
+        effective_activites = list(
+            set(allowed_activites) & set(filter_query.church_activity_id)
+        )
+    else:
+        effective_activites = allowed_activites
+    usage_filters.append(SongUsage.church_activity_id.in_(effective_activites))
+
+    # Date filters
+    from_date = filter_query.from_date or date(1900, 1, 1)
+    to_date = filter_query.to_date or date(2100, 1, 1)
+    usage_filters.append(SongUsage.used_date.between(from_date, to_date))
+
+    # Unique filter
+    count_expr = (
+        func.count(func.distinct(SongUsage.song_id))
+        if filter_query.unique
+        else func.count(SongUsage.id)
+    )
+
+    results = (
+        db.query(
+            Song.is_hymn,
+            count_expr.label("count"),
+        )
+        .join(SongUsage.song)
+        .filter(*usage_filters)
+        .group_by(Song.is_hymn)
+        .order_by(count_expr.desc())
+    )
+
+    counts = {"hymn": 0, "song": 0}
+    for is_hymn, count in results:
+        key = "hymn" if is_hymn else "song"
+        counts[key] = count
+
+    return counts
 
 
 @router.get(
