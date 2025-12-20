@@ -879,3 +879,151 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
         returned_ids = {u["church_activity_id"] for u in response.json()}
         assert returned_ids == {activity0.id, activity2.id}
+
+
+class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
+    url = "songs/key-summary"
+
+    def test_key_summary_success(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song_c = self._create_song(db_session, song_key="C")
+        song_d = self._create_song(db_session, song_key="D")
+
+        self._create_usage(db_session, song_c, activity, date.today())
+        self._create_usage(db_session, song_c, activity, date.today())
+        self._create_usage(db_session, song_d, activity, date.today())
+
+        response = client.get(
+            self.url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should return song_keys with counts, ordered by count desc
+        assert any(d["song_key"] == "C" and d["count"] == 2 for d in data)
+        assert any(d["song_key"] == "D" and d["count"] == 1 for d in data)
+
+    def test_filter_from_date(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        old_date = date.today() - timedelta(days=10)
+        recent_date = date.today() - timedelta(days=1)
+
+        song = self._create_song(db_session, song_key="C")
+
+        self._create_usage(db_session, song, activity, old_date)
+        self._create_usage(db_session, song, activity, recent_date)
+
+        params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only usage on recent_date counts, so count should be 1
+        assert len(data) == 1
+        assert data[0]["song_key"] == "C"
+        assert data[0]["count"] == 1
+
+    def test_filter_to_date(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        old_date = date.today() - timedelta(days=10)
+        recent_date = date.today() - timedelta(days=1)
+
+        song = self._create_song(db_session, song_key="C")
+
+        self._create_usage(db_session, song, activity, old_date)
+        self._create_usage(db_session, song, activity, recent_date)
+
+        params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Only usage on old_date counts, so count should be 1
+        assert len(data) == 1
+        assert data[0]["song_key"] == "C"
+        assert data[0]["count"] == 1
+
+    def test_filter_multiple_church_activity_ids(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        activity1 = self._create_church_activity(
+            db_session, church, "Activity One", "activity_one"
+        )
+        activity2 = self._create_church_activity(
+            db_session, church, "Activity Two", "activity_two"
+        )
+
+        song = self._create_song(db_session, song_key="C")
+
+        self._create_usage(db_session, song, activity1, date.today())
+        self._create_usage(db_session, song, activity2, date.today())
+
+        params = [
+            ("church_activity_id", activity1.id),
+            ("church_activity_id", activity2.id),
+        ]
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Count should include usage from both activities
+        assert any(d["song_key"] == "C" and d["count"] == 2 for d in data)
+
+    def test_unique_true_counts_distinct_songs(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song = self._create_song(db_session, song_key="C")
+
+        # Multiple usages for the same song
+        self._create_usage(db_session, song, activity, date.today())
+        self._create_usage(db_session, song, activity, date.today())
+
+        params = {"unique": "true"}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # With unique true, count counts distinct songs,
+        # so usage count = 1 for song_key C
+        assert any(d["song_key"] == "C" and d["count"] == 1 for d in data)

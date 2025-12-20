@@ -46,6 +46,13 @@ class SongListFilters(BaseModel):
     lyric: str | None = None
 
 
+class SongKeyFilters(BaseModel):
+    from_date: date | None = None
+    to_date: date | None = None
+    church_activity_id: list[int] | None = None
+    unique: bool = False
+
+
 class SongUsageFilters(BaseModel):
     used_after: date | None = None
     used_before: date | None = None
@@ -67,6 +74,12 @@ class SongListUsageFilters(BaseModel):
 class SongBasicDetails(BaseModel):
     id: int
     first_line: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SongKeyResponse(BaseModel):
+    song_key: str
+    count: int
     model_config = ConfigDict(from_attributes=True)
 
 
