@@ -781,7 +781,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
         assert response.status_code == 422
 
-    def test_filter_used_after(self, client, db_session):
+    def test_filter_from_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
         token = self._get_access_token_from_login(client, self.username, self.password)
 
@@ -803,7 +803,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, activity_old, old_date)
         self._create_usage(db_session, song, activity_new, new_date)
 
-        params = {"used_after": (date.today() - timedelta(days=5)).isoformat()}
+        params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
 
         response = client.get(url, headers={"Authorization": f"Bearer {token}"})
@@ -813,7 +813,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         assert len(data) == 1
         assert data[0]["church_activity_id"] == activity_new.id
 
-    def test_filter_used_before(self, client, db_session):
+    def test_filter_to_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
         token = self._get_access_token_from_login(client, self.username, self.password)
 
@@ -835,7 +835,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, activity_old, old_date)
         self._create_usage(db_session, song, activity_new, new_date)
 
-        params = {"used_before": (date.today() - timedelta(days=5)).isoformat()}
+        params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
 
         response = client.get(url, headers={"Authorization": f"Bearer {token}"})

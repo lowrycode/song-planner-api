@@ -9,7 +9,13 @@ class SongType(str, Enum):
     hymn = "hymn"
 
 
-# Dependency Schemas
+# Shared Schemas
+class UsageContextFilters(BaseModel):
+    from_date: date | None = None
+    to_date: date | None = None
+    church_activity_id: list[int] | None = None
+
+
 class SongLyricsSchema(BaseModel):
     content: str
     model_config = ConfigDict(from_attributes=True)
@@ -46,35 +52,24 @@ class SongListFilters(BaseModel):
     lyric: str | None = None
 
 
-class SongKeyFilters(BaseModel):
-    from_date: date | None = None
-    to_date: date | None = None
-    church_activity_id: list[int] | None = None
+class SongKeyFilters(UsageContextFilters):
     unique: bool = False
 
 
-class SongTypeFilters(BaseModel):
-    from_date: date | None = None
-    to_date: date | None = None
-    church_activity_id: list[int] | None = None
+class SongTypeFilters(UsageContextFilters):
     unique: bool = False
 
 
-class SongUsageFilters(BaseModel):
-    used_after: date | None = None
-    used_before: date | None = None
-    church_activity_id: list[int] | None = None
+class SongUsageFilters(UsageContextFilters):
+    pass
 
 
-class SongListUsageFilters(BaseModel):
-    from_date: date | None = None
-    to_date: date | None = None
-    lyric: str | None = None
+class SongListUsageFilters(UsageContextFilters):
     song_key: str | None = None
     song_type: SongType | None = None
+    lyric: str | None = None
     last_used_in_range: bool = False
     first_used_in_range: bool = False
-    church_activity_id: list[int] | None = None
 
 
 # Response Schemas

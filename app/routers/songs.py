@@ -410,10 +410,10 @@ def song_usages(
     query = db.query(SongUsage).filter(SongUsage.song_id == song_id)
 
     # Apply filters
-    if filters.used_after:
-        query = query.filter(SongUsage.used_date >= filters.used_after)
-    if filters.used_before:
-        query = query.filter(SongUsage.used_date <= filters.used_before)
+    if filters.from_date:
+        query = query.filter(SongUsage.used_date >= filters.from_date)
+    if filters.to_date:
+        query = query.filter(SongUsage.used_date <= filters.to_date)
     if filters.church_activity_id:
         query = query.filter(
             SongUsage.church_activity_id.in_(filters.church_activity_id)
