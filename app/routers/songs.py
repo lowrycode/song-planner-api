@@ -61,7 +61,7 @@ def list_songs(
     return query.all()
 
 
-@router.get("/key-summary", status_code=200, response_model=dict[str, int])
+@router.get("/keys/summary", status_code=200, response_model=dict[str, int])
 def song_keys_overview(
     filter_query: Annotated[SongKeyFilters, Query()],
     db: Session = Depends(get_db),
@@ -116,7 +116,7 @@ def song_keys_overview(
     return response
 
 
-@router.get("/type-summary", status_code=200, response_model=SongTypeResponse)
+@router.get("/types/summary", status_code=200, response_model=SongTypeResponse)
 def song_type_overview(
     filter_query: Annotated[SongTypeFilters, Query()],
     db: Session = Depends(get_db),
@@ -175,7 +175,7 @@ def song_type_overview(
 
 
 @router.get(
-    "/usage-summary", status_code=200, response_model=list[SongListUsageResponse]
+    "/usages/summary", status_code=200, response_model=list[SongListUsageResponse]
 )
 def list_songs_with_usage_summary(
     filter_query: Annotated[SongListUsageFilters, Query()],

@@ -183,7 +183,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
 
 class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
-    url = "/songs/usage-summary"
+    url = "/songs/usages/summary"
 
     def test_get_usage_summary_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
@@ -882,7 +882,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
 
 class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
-    url = "songs/key-summary"
+    url = "songs/keys/summary"
 
     def test_key_summary_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
@@ -1019,7 +1019,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
 
 class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
-    url = "/songs/type-summary"
+    url = "/songs/types/summary"
 
     def test_get_type_summary_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
