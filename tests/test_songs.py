@@ -553,6 +553,158 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert len(data) == 1
         assert data[0]["id"] == song_ok.id
 
+    def test_filter_used_in_range_includes_song(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song = self._create_song(db_session)
+
+        in_range = date.today() - timedelta(days=2)
+        out_of_range = date.today() - timedelta(days=30)
+
+        self._create_usage(db_session, song, activity, out_of_range)
+        self._create_usage(db_session, song, activity, in_range)
+        self._create_usage_stats(
+            db_session, song, activity, out_of_range, in_range
+        )
+
+        params = {
+            "from_date": (date.today() - timedelta(days=5)).isoformat(),
+            "to_date": date.today().isoformat(),
+            "used_in_range": "true",
+        }
+
+        response = client.get(
+            f"{self.url}?{urlencode(params)}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == song.id
+
+    def test_filter_used_in_range_excludes_song(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song = self._create_song(db_session)
+
+        old = date.today() - timedelta(days=30)
+
+        self._create_usage(db_session, song, activity, old)
+        self._create_usage_stats(
+            db_session, song, activity, old, old
+        )
+
+        params = {
+            "from_date": (date.today() - timedelta(days=5)).isoformat(),
+            "to_date": date.today().isoformat(),
+            "used_in_range": "true",
+        }
+
+        response = client.get(
+            f"{self.url}?{urlencode(params)}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.json() == []
+
+    def test_filter_used_and_first_used_in_range(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        # Matching song
+        song_ok = self._create_song(db_session)
+
+        first_ok = date.today() - timedelta(days=3)
+        used_ok = date.today() - timedelta(days=1)
+
+        self._create_usage(db_session, song_ok, activity, first_ok)
+        self._create_usage(db_session, song_ok, activity, used_ok)
+        self._create_usage_stats(
+            db_session, song_ok, activity, first_ok, used_ok
+        )
+
+        # Non-matching song (first_used outside range)
+        song_bad = self._create_song(db_session)
+
+        first_bad = date.today() - timedelta(days=30)
+        used_in_range = date.today() - timedelta(days=1)
+
+        self._create_usage(db_session, song_bad, activity, first_bad)
+        self._create_usage(db_session, song_bad, activity, used_in_range)
+        self._create_usage_stats(
+            db_session, song_bad, activity, first_bad, used_in_range
+        )
+
+        params = {
+            "from_date": (date.today() - timedelta(days=5)).isoformat(),
+            "to_date": date.today().isoformat(),
+            "used_in_range": "true",
+            "first_used_in_range": "true",
+        }
+
+        response = client.get(
+            f"{self.url}?{urlencode(params)}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == song_ok.id
+
+    def test_filter_used_and_last_used_in_range(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song_ok = self._create_song(db_session)
+        song_bad = self._create_song(db_session)
+
+        last_ok = date.today() - timedelta(days=2)
+        last_bad = date.today() - timedelta(days=30)
+
+        self._create_usage(db_session, song_ok, activity, last_ok)
+        self._create_usage_stats(
+            db_session, song_ok, activity, last_ok, last_ok
+        )
+
+        self._create_usage(db_session, song_bad, activity, last_bad)
+        self._create_usage_stats(
+            db_session, song_bad, activity, last_bad, last_bad
+        )
+
+        params = {
+            "from_date": (date.today() - timedelta(days=5)).isoformat(),
+            "to_date": date.today().isoformat(),
+            "used_in_range": "true",
+            "last_used_in_range": "true",
+        }
+
+        response = client.get(
+            f"{self.url}?{urlencode(params)}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == song_ok.id
+
     def test_combined_song_and_date_filters(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
         token = self._get_access_token_from_login(client, self.username, self.password)

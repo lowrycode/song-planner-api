@@ -48,9 +48,9 @@ def list_songs(
     if filter_query.song_type:
         song_type = filter_query.song_type
         if song_type == "song":
-            query = query.filter(Song.is_hymn == False)
+            query = query.filter(Song.is_hymn.is_(False))
         elif song_type == "hymn":
-            query = query.filter(Song.is_hymn == True)
+            query = query.filter(Song.is_hymn.is_(True))
     if filter_query.lyric is not None:
         query = query.join(SongLyrics).filter(
             SongLyrics.song_id == Song.id,
@@ -75,7 +75,7 @@ def song_keys_overview(
     # This approach breaks tests due to primary key auto-increment behaviour!
     # allowed_activity_ids = [0, 1, 2, 3]
     # Temp allow large range of numbers
-    allowed_activity_ids = [n for n in range(100)]
+    allowed_activity_ids = set(range(100))
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Activity filters
@@ -130,7 +130,7 @@ def song_type_overview(
     # This approach breaks tests due to primary key auto-increment behaviour!
     # allowed_activity_ids = [0, 1, 2, 3]
     # Temp allow large range of numbers
-    allowed_activity_ids = [n for n in range(100)]
+    allowed_activity_ids = set(range(100))
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Activity filters
@@ -192,23 +192,24 @@ def list_songs_with_usage_summary(
     # This approach breaks tests due to primary key auto-increment behaviour!
     # allowed_activity_ids = [0, 1, 2, 3]
     # Temp allow large range of numbers
-    allowed_activity_ids = [n for n in range(100)]
-    usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
-    usage_stats_filters.append(
-        SongUsageStats.church_activity_id.in_(allowed_activity_ids)
-    )
+    allowed_activity_ids = set(range(100))
 
-    # activity filters
-    allowed_activites = allowed_activity_ids
+    # Combine allowed activities with filtered activities in url params
     if filter_query.church_activity_id:
-        effective_activites = list(
-            set(allowed_activites) & set(filter_query.church_activity_id)
+        effective_activities = allowed_activity_ids & set(
+            filter_query.church_activity_id
         )
     else:
-        effective_activites = allowed_activites
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activites))
+        effective_activities = allowed_activity_ids
+
+    effective_activities = list(effective_activities)
+    if not effective_activities:
+        return []
+
+    # Activities filter
+    usage_filters.append(SongUsage.church_activity_id.in_(effective_activities))
     usage_stats_filters.append(
-        SongUsageStats.church_activity_id.in_(effective_activites)
+        SongUsageStats.church_activity_id.in_(effective_activities)
     )
 
     # Date filters
@@ -216,23 +217,48 @@ def list_songs_with_usage_summary(
     to_date = filter_query.to_date or date(2100, 1, 1)
     usage_filters.append(SongUsage.used_date.between(from_date, to_date))
 
-    # First or last filters
-    first_last_filters = []
-    if filter_query.first_used_in_range:
-        first_last_filters.append(SongUsageStats.first_used.between(from_date, to_date))
-    if filter_query.last_used_in_range:
-        first_last_filters.append(SongUsageStats.last_used.between(from_date, to_date))
+    # Build song_id filter once, using set logic instead of nested queries
+    song_id_filters = None
 
-    if first_last_filters:
-        # Get song_ids for filtering later
-        subq_song_ids = (
-            db.query(SongUsageStats.song_id)
-            .filter(*usage_stats_filters, *first_last_filters)
-            .distinct()
-            .subquery()
-        )
-    else:
-        subq_song_ids = None
+    # First/last and used_in_range filters
+    if (
+        filter_query.first_used_in_range
+        or filter_query.last_used_in_range
+        or filter_query.used_in_range
+    ):
+        filters_to_apply = []
+
+        if filter_query.first_used_in_range or filter_query.last_used_in_range:
+            first_last_filters = []
+            if filter_query.first_used_in_range:
+                first_last_filters.append(
+                    SongUsageStats.first_used.between(from_date, to_date)
+                )
+            if filter_query.last_used_in_range:
+                first_last_filters.append(
+                    SongUsageStats.last_used.between(from_date, to_date)
+                )
+
+            song_ids_first_last = (
+                db.query(SongUsageStats.song_id)
+                .filter(*usage_stats_filters, *first_last_filters)
+                .distinct()
+            )
+            filters_to_apply.append(song_ids_first_last)
+
+        if filter_query.used_in_range:
+            song_ids_used = (
+                db.query(SongUsage.song_id).filter(*usage_filters).distinct()
+            )
+            filters_to_apply.append(song_ids_used)
+
+        # Combine using intersection if both filters present
+        if len(filters_to_apply) == 2:
+            song_id_filters = (
+                filters_to_apply[0].intersect(filters_to_apply[1]).subquery()
+            )
+        else:
+            song_id_filters = filters_to_apply[0].subquery()
 
     # Other filters
     if filter_query.song_key:
@@ -240,9 +266,9 @@ def list_songs_with_usage_summary(
     if filter_query.song_type:
         song_type = filter_query.song_type
         if song_type == "song":
-            song_filters.append(Song.is_hymn == False)
+            song_filters.append(Song.is_hymn.is_(False))
         elif song_type == "hymn":
-            song_filters.append(Song.is_hymn == True)
+            song_filters.append(Song.is_hymn.is_(True))
     if filter_query.lyric:
         lyrics_subquery = (
             db.query(SongLyrics.id)
@@ -309,8 +335,8 @@ def list_songs_with_usage_summary(
     query = query.filter(*song_filters)
 
     # Filter further (using song_ids derived from first_last filters)
-    if subq_song_ids is not None:
-        query = query.filter(Song.id.in_(select(subq_song_ids)))
+    if song_id_filters is not None:
+        query = query.filter(Song.id.in_(select(song_id_filters)))
 
     # Query DB
     rows = query.all()
@@ -356,7 +382,7 @@ def list_songs_with_usage_summary(
     activity_map = {
         e.id: (e.slug, e.name)
         for e in db.query(ChurchActivity).filter(
-            ChurchActivity.id.in_(effective_activites)
+            ChurchActivity.id.in_(effective_activities)
         )
     }
 

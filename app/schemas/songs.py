@@ -70,6 +70,7 @@ class SongListUsageFilters(UsageContextFilters):
     lyric: str | None = None
     last_used_in_range: bool = False
     first_used_in_range: bool = False
+    used_in_range: bool = False
 
 
 # Response Schemas
