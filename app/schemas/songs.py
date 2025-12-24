@@ -1,5 +1,5 @@
 from datetime import date
-from pydantic import BaseModel, HttpUrl, ConfigDict
+from pydantic import BaseModel, HttpUrl, ConfigDict, field_validator
 from enum import Enum
 
 
@@ -26,6 +26,17 @@ class SongResourcesSchema(BaseModel):
     harmony_vid: HttpUrl | None = None
     harmony_pdf: HttpUrl | None = None
     harmony_ms: HttpUrl | None = None
+
+    @field_validator(
+        "sheet_music",
+        "harmony_vid",
+        "harmony_pdf",
+        "harmony_ms",
+        mode="before",
+    )
+    def empty_str_to_none(cls, v):
+        return v or None
+
     model_config = ConfigDict(from_attributes=True)
 
 
