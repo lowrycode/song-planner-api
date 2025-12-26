@@ -11,7 +11,7 @@ from app.utils.auth import verify_access_token
 # - if found: returns raw JWT
 # - if not found: raises HTTPException (401 Not authenticated)
 # with response header 'WWW-Authenticate: Bearer'
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 # --- Authentication ---
