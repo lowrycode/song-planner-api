@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
-from app.models import User, RefreshToken
+from app.models import User, RefreshToken, UserRole
 from app.schemas.auth import (
     UserRegisterRequest,
     UserRegisterResponse,
@@ -12,6 +12,8 @@ from app.schemas.auth import (
     TokenResponse,
     UserLogoutRequest,
     UserLogoutResponse,
+    ChangePasswordRequest,
+    ChangePasswordResponse,
 )
 from app.utils.auth import (
     create_access_token,
@@ -21,6 +23,7 @@ from app.utils.auth import (
     verify_password,
 )
 from app.settings import settings
+from app.dependencies import require_min_role
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -125,3 +128,40 @@ def logout(request: UserLogoutRequest, db: Session = Depends(get_db)):
         db.commit()
 
     return {"message": "Logged out"}
+
+
+@router.post(
+    "/change-password",
+    response_model=ChangePasswordResponse,
+)
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+    # Verify current password
+    if not verify_password(data.current_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    # Prevent reusing the same password
+    if verify_password(data.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="New password must be different from the current password",
+        )
+
+    # Hash and save new password
+    user.hashed_password = hash_password(data.new_password)
+
+    # Revoke all existing refresh tokens for this user
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == user.id,
+        RefreshToken.revoked == False,
+    ).update({"revoked": True})
+
+    db.commit()
+
+    return {"message": "Password changed successfully"}

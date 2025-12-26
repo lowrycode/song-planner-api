@@ -1,8 +1,8 @@
+from datetime import datetime, timezone, timedelta
 from app.models import User, RefreshToken, UserRole
 from app.utils.auth import hash_password, hash_token, create_refresh_token
 from app.settings import settings
-from datetime import datetime, timezone, timedelta
-from pprint import pprint
+from tests.helpers import BaseTestHelpers
 
 
 class TestRegisterUser:
@@ -365,3 +365,170 @@ class TestLogout:
 
         # FastAPI will return a 422 validation error
         assert response.status_code == 422
+
+
+class TestChangePassword(BaseTestHelpers):
+    url = "/auth/change-password"
+
+    # Helpers
+    def _payload(
+        self,
+        current_password="password123",
+        new_password="newpassword123",
+        confirm_new_password="newpassword123",
+    ):
+        return {
+            "current_password": current_password,
+            "new_password": new_password,
+            "confirm_new_password": confirm_new_password,
+        }
+
+    def _auth_headers(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        token = self._get_access_token_from_login(
+            client, self.username, self.password
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    # -------- Tests --------
+    def test_change_password_success(self, client, db_session):
+        headers = self._auth_headers(client, db_session)
+
+        response = client.post(
+            self.url,
+            json=self._payload(),
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["message"] == "Password changed successfully"
+
+    def test_change_password_invalid_current_password(self, client, db_session):
+        headers = self._auth_headers(client, db_session)
+
+        response = client.post(
+            self.url,
+            json=self._payload(current_password="wrongpassword"),
+            headers=headers,
+        )
+
+        assert response.status_code == 400
+        assert "Current password is incorrect" in response.json()["detail"]
+
+    def test_change_password_passwords_do_not_match(self, client, db_session):
+        headers = self._auth_headers(client, db_session)
+
+        response = client.post(
+            self.url,
+            json=self._payload(
+                new_password="newpassword123",
+                confirm_new_password="differentpassword",
+            ),
+            headers=headers,
+        )
+
+        assert response.status_code == 422
+        msg = response.json()["detail"][0]["msg"]
+        assert "Passwords do not match" in msg
+
+    def test_change_password_reuse_same_password(self, client, db_session):
+        headers = self._auth_headers(client, db_session)
+
+        response = client.post(
+            self.url,
+            json=self._payload(
+                new_password=self.password,
+                confirm_new_password=self.password,
+            ),
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert "must be different" in response.json()["detail"]
+
+    def test_change_password_revokes_all_refresh_tokens(self, client, db_session):
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+
+        token = self._get_access_token_from_login(
+            client, self.username, self.password
+        )
+        headers = {"Authorization": f"Bearer {token}"}
+
+        # Create refresh tokens - simulate 2 devices
+        for _ in range(2):
+            refresh = create_refresh_token()
+            db_session.add(
+                RefreshToken(
+                    user_id=user.id,
+                    token_hash=hash_token(refresh),
+                    expires_at=datetime.now(timezone.utc)
+                    + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+                )
+            )
+        db_session.commit()
+
+        response = client.post(
+            self.url,
+            json=self._payload(),
+            headers=headers,
+        )
+
+        assert response.status_code == 200
+
+        tokens = (
+            db_session.query(RefreshToken)
+            .filter(RefreshToken.user_id == user.id)
+            .all()
+        )
+
+        assert all(t.revoked for t in tokens)
+
+    def test_change_password_requires_authentication(self, client):
+        response = client.post(
+            self.url,
+            json=self._payload(),
+        )
+
+        assert response.status_code == 401
+
+    def test_change_password_new_password_too_short(self, client, db_session):
+        headers = self._auth_headers(client, db_session)
+
+        short_password = "abcd"  # 4 chars, less than min length 5
+        response = client.post(
+            self.url,
+            json=self._payload(
+                new_password=short_password,
+                confirm_new_password=short_password,
+            ),
+            headers=headers,
+        )
+
+        assert response.status_code == 422
+        errors = response.json()["detail"]
+        assert any("Password must be between" in err["msg"] for err in errors)
+
+    def test_change_password_new_password_too_long(self, client, db_session):
+        headers = self._auth_headers(client, db_session)
+
+        long_password = "a" * 21  # 21 chars, more than max length 20
+        response = client.post(
+            self.url,
+            json=self._payload(
+                new_password=long_password,
+                confirm_new_password=long_password,
+            ),
+            headers=headers,
+        )
+
+        assert response.status_code == 422
+        errors = response.json()["detail"]
+        assert any("Password must be between" in err["msg"] for err in errors)
