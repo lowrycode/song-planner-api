@@ -75,6 +75,10 @@ class SongUsageFilters(UsageContextFilters):
     pass
 
 
+class SongCountByActivityFilters(UsageContextFilters):
+    pass
+
+
 class SongListUsageFilters(UsageContextFilters):
     song_key: str | None = None
     song_type: SongType | None = None
@@ -123,3 +127,10 @@ class SongListUsageResponse(BaseModel):
     activities: dict[str, ActivityUsageStats]
     overall: OverallActivityUsageStats
     model_config = ConfigDict(from_attributes=True)
+
+
+class SongCountByActivityResponse(BaseModel):
+    church_activity_id: int
+    church_activity_name: str
+    total_count: int
+    unique_count: int
