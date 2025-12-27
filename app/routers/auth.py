@@ -36,6 +36,13 @@ def register_user(data: UserRegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
 
+    # Check passwords match 
+    if data.password != data.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match",
+        )
+
     # Hash password
     hashed_pw = hash_password(data.password)
 

@@ -40,9 +40,9 @@ class TestRegisterUser:
         payload = self._get_payload(confirm_password="password_mismatch")
         response = client.post("/auth/register", json=payload)
 
-        assert response.status_code == 422
+        assert response.status_code == 400
         err = response.json()
-        msg = err["detail"][0]["msg"]
+        msg = err["detail"]
         assert "Passwords do not match" in msg
 
     def test_register_user_duplicate_username(self, client, db_session):
@@ -431,8 +431,8 @@ class TestChangePassword(BaseTestHelpers):
             headers=headers,
         )
 
-        assert response.status_code == 422
-        msg = response.json()["detail"][0]["msg"]
+        assert response.status_code == 400
+        msg = response.json()["detail"]
         assert "Passwords do not match" in msg
 
     def test_change_password_reuse_same_password(self, client, db_session):
