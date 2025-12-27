@@ -153,6 +153,12 @@ def change_password(
             detail="New password must be different from the current password",
         )
 
+    if data.new_password != data.confirm_new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match",
+        )
+
     # Hash and save new password
     user.hashed_password = hash_password(data.new_password)
 
