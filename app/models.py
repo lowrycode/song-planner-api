@@ -47,6 +47,77 @@ class User(Base):
         return f"User id={self.id} username={self.username}"
 
 
+class UserNetworkAccess(Base):
+    __tablename__ = "user_network_access"
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    network_id = Column(
+        Integer,
+        ForeignKey("networks.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    user = relationship("User", lazy="joined")
+    network = relationship("Network", lazy="joined")
+    __table_args__ = (Index("idx_user_network_access_user", "user_id"),)
+
+    def __repr__(self):
+        return (
+            f"<UserNetworkAccess user_id={self.user_id} network_id={self.network_id}>"
+        )
+
+
+class UserChurchAccess(Base):
+    __tablename__ = "user_church_access"
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    church_id = Column(
+        Integer,
+        ForeignKey("churches.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    user = relationship("User", lazy="joined")
+    church = relationship("Church", lazy="joined")
+    __table_args__ = (Index("idx_user_church_access_user", "user_id"),)
+
+    def __repr__(self):
+        return f"<UserChurchAccess user_id={self.user_id} church_id={self.church_id}>"
+
+
+class UserChurchActivityAccess(Base):
+    __tablename__ = "user_church_activity_access"
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    church_activity_id = Column(
+        Integer,
+        ForeignKey("church_activites.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+    user = relationship("User", lazy="joined")
+    church_activity = relationship("ChurchActivity", lazy="joined")
+    __table_args__ = (Index("idx_user_activity_access_user", "user_id"),)
+
+    def __repr__(self):
+        return (
+            f"<UserChurchActivityAccess user_id={self.user_id} "
+            f"church_activity_id={self.church_activity_id}>"
+        )
+
+
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
