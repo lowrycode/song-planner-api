@@ -27,6 +27,9 @@ class BaseTestHelpers:
         db_session.refresh(user)
         return user
 
+    def _create_admin_user(self, db_session, username, password):
+        return self._create_user(db_session, username, password, role=UserRole.admin)
+
     def _get_access_token_from_login(self, client, username, password) -> str:
         response = client.post(
             "/auth/login",
@@ -140,17 +143,29 @@ class BaseTestHelpers:
 
 
 class AuthTestsMixin:
+    http_method = "get"  # default can be overridden in parent class
+
+    def _request(self, client, url, token=None):
+        method = self.http_method.lower()
+        request_fn = getattr(client, method)
+
+        if not hasattr(client, method):
+            raise ValueError(f"Unsupported HTTP method: {method}")
+
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+
+        return request_fn(url, headers=headers)
 
     def test_unauthorized_access_no_token(self, client):
         # No token provided
-        response = client.get(self.url)
+        response = self._request(client, self.url)
         assert response.status_code == 401
 
     def test_unauthorized_access_invalid_token(self, client):
         # Invalid token provided
-        response = client.get(
-            self.url, headers={"Authorization": "Bearer invalidtoken"}
-        )
+        response = self._request(client, self.url, token="invalidtoken")
         assert response.status_code == 401
 
     def test_unapproved_role(self, client, db_session):
@@ -164,5 +179,50 @@ class AuthTestsMixin:
         token = self._get_access_token_from_login(client, self.username, self.password)
 
         # Request with valid token but unapproved role
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = self._request(client, self.url, token)
         assert response.status_code == 403  # Forbidden
+
+
+class AdminAuthTestsMixin:
+    http_method = "get"  # default can be overridden in parent class
+
+    def _request(self, client, url, token):
+        method = self.http_method.lower()
+        request_fn = getattr(client, method)
+        return request_fn(
+            url,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    def test_admin_user_allowed(self, client, db_session):
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        response = self._request(client, self.url, token)
+        assert response.status_code != 403
+
+    def test_normal_user_denied(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            role=UserRole.normal,
+        )
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        response = self._request(client, self.url, token)
+        assert response.status_code == 403
+
+    def test_editor_denied(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            role=UserRole.editor,
+        )
+        token = self._get_access_token_from_login(client, self.username, self.password)
+
+        response = self._request(client, self.url, token)
+        assert response.status_code == 403
