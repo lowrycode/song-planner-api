@@ -103,7 +103,7 @@ class UserChurchActivityAccess(Base):
     )
     church_activity_id = Column(
         Integer,
-        ForeignKey("church_activites.id", ondelete="CASCADE"),
+        ForeignKey("church_activities.id", ondelete="CASCADE"),
         primary_key=True,
     )
 
@@ -144,7 +144,7 @@ class SongUsage(Base):
     )
     used_date = Column(Date, nullable=False)
     church_activity_id = Column(
-        Integer, ForeignKey("church_activites.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("church_activities.id", ondelete="CASCADE"), nullable=False
     )
 
     # Relationships
@@ -178,7 +178,7 @@ class SongUsageStats(Base):
         Integer, ForeignKey("songs.id", ondelete="CASCADE"), nullable=False
     )
     church_activity_id = Column(
-        Integer, ForeignKey("church_activites.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("church_activities.id", ondelete="CASCADE"), nullable=False
     )
     first_used = Column(Date, nullable=False)
     last_used = Column(Date, nullable=False)
@@ -317,7 +317,7 @@ class Church(Base):
 
 
 class ChurchActivity(Base):
-    __tablename__ = "church_activites"
+    __tablename__ = "church_activities"
     __table_args__ = (
         UniqueConstraint("church_id", "slug", name="uq_church_activity_slug"),
         UniqueConstraint("church_id", "name", name="uq_church_activity_name"),
