@@ -34,17 +34,37 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String(50), unique=True, nullable=False)
     hashed_password = Column(String(200), nullable=False)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
     role = Column(Integer, default=UserRole.unapproved, nullable=False)
     created_at = Column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    network_id = Column(
+        Integer,
+        ForeignKey("networks.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    church_id = Column(
+        Integer,
+        ForeignKey("churches.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
+    __table_args__ = (
+        Index("idx_users_network", "network_id"),
+        Index("idx_users_church", "church_id"),
+    )
+
+    # Relationships
+    network = relationship("Network", back_populates="users")
+    church = relationship("Church", back_populates="users")
     refreshtokens = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self):
-        return f"User id={self.id} username={self.username}"
+        return f"User id={self.id} Name={self.first_name} {self.last_name}"
 
 
 class UserNetworkAccess(Base):
@@ -287,7 +307,8 @@ class Network(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
 
-    # Relationship to churches
+    # Relationships
+    users = relationship("User", back_populates="network")
     churches = relationship(
         "Church", back_populates="network", cascade="all, delete-orphan"
     )
@@ -306,7 +327,13 @@ class Church(Base):
     name = Column(String(20), nullable=False)
     slug = Column(String(20), nullable=False)
 
+    __table_args__ = (
+        Index("idx_church_network_id", "network_id"),
+        UniqueConstraint("network_id", "slug", name="uq_church_network_slug"),
+    )
+
     # Relationships
+    users = relationship("User", back_populates="church")
     network = relationship("Network", back_populates="churches")
     activities = relationship(
         "ChurchActivity", back_populates="church", cascade="all, delete-orphan"
