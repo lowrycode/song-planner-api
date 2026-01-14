@@ -19,9 +19,33 @@ class BaseTestHelpers:
     password = "password123"
 
     # --- Helper Methods for Test Setup ---
-    def _create_user(self, db_session, username, password, role=UserRole.normal):
-        hashed = hash_password(password)
-        user = User(username=username, hashed_password=hashed, role=role)
+    def _create_user(
+        self,
+        db_session,
+        username="testuser",
+        password="password",
+        role=UserRole.normal,
+        first_name="Test",
+        last_name="User",
+        network=None,
+        church=None,
+    ):
+        if network is None:
+            network = self._create_network(db_session)
+
+        if church is None:
+            church = self._create_church(db_session, network)
+
+        user = User(
+            username=username,
+            hashed_password=hash_password(password),
+            first_name=first_name,
+            last_name=last_name,
+            role=role,
+            network_id=network.id,
+            church_id=church.id,
+        )
+
         db_session.add(user)
         db_session.commit()
         db_session.refresh(user)

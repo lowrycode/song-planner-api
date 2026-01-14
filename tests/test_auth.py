@@ -1,27 +1,42 @@
+import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import User, RefreshToken, UserRole
-from app.utils.auth import hash_password, hash_token, create_refresh_token
+from app.utils.auth import hash_token, create_refresh_token
 from app.settings import settings
 from tests.helpers import BaseTestHelpers
 
 
-class TestRegisterUser:
+class TestRegisterUser(BaseTestHelpers):
+
     # --- Helper Methods ---
     def _get_payload(
         self,
+        first_name="John",
+        last_name="Doe",
         username="testuser",
         password="password123",
         confirm_password="password123",
+        network_id=None,
+        church_id=None,
     ):
         return {
+            "first_name": first_name,
+            "last_name": last_name,
             "username": username,
             "password": password,
             "confirm_password": confirm_password,
+            "network_id": network_id,
+            "church_id": church_id,
         }
 
     # --- Tests ---
     def test_register_user_success(self, client, db_session):
-        payload = self._get_payload()
+        # Create network and church
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        # Pass IDs to payload
+        payload = self._get_payload(network_id=network.id, church_id=church.id)
         response = client.post("/auth/register", json=payload)
 
         # Check API response
@@ -33,28 +48,48 @@ class TestRegisterUser:
         user_id = data["user_id"]
         user = db_session.query(User).filter(User.id == user_id).first()
         assert user is not None
+        assert user.first_name == payload["first_name"]
+        assert user.last_name == payload["last_name"]
         assert user.username == payload["username"]
+        assert user.network_id == payload["network_id"]
+        assert user.church_id == payload["church_id"]
         assert user.role == UserRole.unapproved
 
-    def test_register_user_password_mismatch(self, client):
-        payload = self._get_payload(confirm_password="password_mismatch")
+    def test_register_user_password_mismatch(self, client, db_session):
+        # Create network and church
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        # Define payload
+        payload = self._get_payload(
+            confirm_password="password_mismatch",
+            network_id=network.id,
+            church_id=church.id,
+        )
         response = client.post("/auth/register", json=payload)
 
+        # Check API response
         assert response.status_code == 400
         err = response.json()
         msg = err["detail"]
         assert "Passwords do not match" in msg
 
     def test_register_user_duplicate_username(self, client, db_session):
-        payload = self._get_payload()
+        # Create network and church
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        # Define payload
+        payload = self._get_payload(network_id=network.id, church_id=church.id)
 
         # Create pre-existing username
-        client.post("/auth/register", json=payload)
+        response1 = client.post("/auth/register", json=payload)
+        assert response1.status_code == 201
 
-        # Attempt to create same username
-        response = client.post("/auth/register", json=payload)
-        assert response.status_code == 400
-        assert "Username already taken" in response.json()["detail"]
+        # Attempt to create same username again
+        response2 = client.post("/auth/register", json=payload)
+        assert response2.status_code == 400
+        assert "Username already taken" in response2.json()["detail"]
 
         # DB check: only one user with this username exists
         users = (
@@ -62,44 +97,150 @@ class TestRegisterUser:
         )
         assert len(users) == 1
 
-    def test_register_user_username_too_short(self, client):
-        min_length = 5
+    def test_register_user_username_too_short(self, client, db_session):
+        # Create network and church
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
 
-        # Below min_length should raise http client error
+        # Create short username
+        min_length = 5
         username = "x" * (min_length - 1)
-        payload = self._get_payload(username=username)
+
+        # Define payload
+        payload = self._get_payload(
+            username=username, network_id=network.id, church_id=church.id
+        )
         response = client.post("/auth/register", json=payload)
+
         assert response.status_code == 422
         err = response.json()
         msg = err["detail"][0]["msg"]
         assert "Username must be between" in msg
 
-    def test_register_user_password_too_short(self, client):
-        min_length = 5
+    def test_register_user_password_too_short(self, client, db_session):
+        # Create network and church
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
 
-        # Below min_length should raise http client error
+        # Create short password
+        min_length = 5
         password = "x" * (min_length - 1)
-        payload = self._get_payload(password=password, confirm_password=password)
+
+        # Define payload
+        payload = self._get_payload(
+            password=password,
+            confirm_password=password,
+            network_id=network.id,
+            church_id=church.id,
+        )
         response = client.post("/auth/register", json=payload)
+
         assert response.status_code == 422
         err = response.json()
         msg = err["detail"][0]["msg"]
         assert "Password must be between" in msg
 
+    def test_register_user_invalid_network_id(self, client, db_session):
+        # Create a valid church, but use invalid network_id
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
 
-class TestLoginUser:
+        invalid_network_id = 99999
+        payload = self._get_payload(
+            network_id=invalid_network_id,
+            church_id=church.id,
+        )
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == 404
+        assert "Network does not exist" in response.json()["detail"]
+
+    def test_register_user_invalid_church_id(self, client, db_session):
+        # Create a valid network, but use invalid church_id
+        network = self._create_network(db_session)
+
+        invalid_church_id = 99999
+        payload = self._get_payload(
+            network_id=network.id,
+            church_id=invalid_church_id,
+        )
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == 404
+        assert "Church does not exist" in response.json()["detail"]
+
+    def test_register_user_church_network_mismatch(self, client, db_session):
+        # Create two networks
+        network1 = self._create_network(db_session, "Network1")
+        network2 = self._create_network(db_session, "Network2")
+
+        # Create church for network1
+        church_for_network1 = self._create_church(db_session, network1)
+
+        # Payload uses church from network1 but network2's ID
+        payload = self._get_payload(
+            network_id=network2.id,
+            church_id=church_for_network1.id,
+        )
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == 400
+        assert "Church does not belong to network" in response.json()["detail"]
+
+    @pytest.mark.parametrize(
+        "missing_field",
+        [
+            "username",
+            "password",
+            "confirm_password",
+            "first_name",
+            "last_name",
+            "network_id",
+            "church_id",
+        ],
+    )
+    def test_register_user_missing_required_fields(
+        self, client, db_session, missing_field
+    ):
+        # Create network and church for valid payload
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        payload = self._get_payload(network_id=network.id, church_id=church.id)
+
+        # Remove the required field from payload
+        payload.pop(missing_field)
+
+        response = client.post("/auth/register", json=payload)
+
+        assert response.status_code == 422
+        details = response.json()["detail"]
+        # Check at least one error is related to the missing field
+        assert any(missing_field in err["loc"] for err in details)
+
+    # def test_register_user_commit_integrity_error(self, client, db_session, mocker):
+    #     # Create network and church
+    #     network = self._create_network(db_session)
+    #     church = self._create_church(db_session, network)
+
+    #     payload = self._get_payload(network_id=network.id, church_id=church.id)
+
+    #     # Mock db.commit() to raise IntegrityError
+    #     mocker.patch(
+    #         "app.routes.auth.db.commit",
+    #         side_effect=IntegrityError("msg", "params", "orig"),
+    #     )
+
+    #     response = client.post("/auth/register", json=payload)
+
+    #     assert response.status_code == status.HTTP_400_BAD_REQUEST
+    #     assert "Invalid network or church" in response.json()["detail"]
+
+
+class TestLoginUser(BaseTestHelpers):
     login_url = "/auth/login"
 
     # --- Helper Methods ---
-    def _create_user(self, db_session, username="testuser", password="password123"):
-        # Create user in DB with hashed password
-        hashed = hash_password(password)
-        user = User(username=username, hashed_password=hashed)
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        return user
-
     def _get_form_data(self, username="testuser", password="password123"):
         return {
             "username": username,
@@ -109,10 +250,11 @@ class TestLoginUser:
     # --- Tests ---
     def test_login_success(self, client, db_session):
         # Create user
-        user = self._create_user(db_session)
+        password = "password123"
+        user = self._create_user(db_session, password=password)
 
         # Check API can login
-        form_data = self._get_form_data()
+        form_data = self._get_form_data(username=user.username, password=password)
         response = client.post(self.login_url, data=form_data)
         assert response.status_code == 200
         data = response.json()
@@ -159,18 +301,10 @@ class TestLoginUser:
         assert response.json()["detail"] == "Invalid credentials"
 
 
-class TestRefreshToken:
+class TestRefreshToken(BaseTestHelpers):
     refresh_url = "/auth/refresh"
 
     # --- Helper Methods ---
-    def _create_user(self, db_session, username="testuser", password="password123"):
-        hashed = hash_password(password)
-        user = User(username=username, hashed_password=hashed)
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        return user
-
     def _create_refresh_token(self, db_session, user, revoked=False, expires_at=None):
         if expires_at is None:
             expires_at = datetime.now(timezone.utc) + timedelta(
@@ -261,18 +395,10 @@ class TestRefreshToken:
         assert response.json()["detail"] == "Invalid refresh token"
 
 
-class TestLogout:
+class TestLogout(BaseTestHelpers):
     logout_url = "/auth/logout"
 
     # --- Helper Methods ---
-    def _create_user(self, db_session, username="testuser", password="password123"):
-        hashed = hash_password(password)
-        user = User(username=username, hashed_password=hashed)
-        db_session.add(user)
-        db_session.commit()
-        db_session.refresh(user)
-        return user
-
     def _create_refresh_token(self, db_session, user, revoked=False, expires_at=None):
         if expires_at is None:
             expires_at = datetime.now(timezone.utc) + timedelta(
@@ -389,9 +515,7 @@ class TestChangePassword(BaseTestHelpers):
             username=self.username,
             password=self.password,
         )
-        token = self._get_access_token_from_login(
-            client, self.username, self.password
-        )
+        token = self._get_access_token_from_login(client, self.username, self.password)
         return {"Authorization": f"Bearer {token}"}
 
     # -------- Tests --------
@@ -457,9 +581,7 @@ class TestChangePassword(BaseTestHelpers):
             password=self.password,
         )
 
-        token = self._get_access_token_from_login(
-            client, self.username, self.password
-        )
+        token = self._get_access_token_from_login(client, self.username, self.password)
         headers = {"Authorization": f"Bearer {token}"}
 
         # Create refresh tokens - simulate 2 devices
@@ -484,9 +606,7 @@ class TestChangePassword(BaseTestHelpers):
         assert response.status_code == 200
 
         tokens = (
-            db_session.query(RefreshToken)
-            .filter(RefreshToken.user_id == user.id)
-            .all()
+            db_session.query(RefreshToken).filter(RefreshToken.user_id == user.id).all()
         )
 
         assert all(t.revoked for t in tokens)
