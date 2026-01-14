@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
 
 from app.database import get_db
-from app.models import User, RefreshToken, UserRole
+from app.models import User, RefreshToken, UserRole, Church, Network
 from app.schemas.auth import (
     UserRegisterRequest,
     UserRegisterResponse,
@@ -36,21 +37,55 @@ def register_user(data: UserRegisterRequest, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Username already taken")
 
-    # Check passwords match 
+    # Check passwords match
     if data.password != data.confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Passwords do not match",
         )
 
+    # Validate network + church relationship
+    if not db.query(Network).filter(Network.id == data.network_id).first():
+        raise HTTPException(404, "Network does not exist")
+
+    if not db.query(Church).filter(Church.id == data.church_id).first():
+        raise HTTPException(404, "Church does not exist")
+
+    if (
+        not db.query(Church)
+        .filter(
+            Church.id == data.church_id,
+            Church.network_id == data.network_id,
+        )
+        .first()
+    ):
+        raise HTTPException(400, "Church does not belong to network")
+
     # Hash password
     hashed_pw = hash_password(data.password)
 
     # Create user
-    new_user = User(username=data.username, hashed_password=hashed_pw)
+    new_user = User(
+        username=data.username,
+        hashed_password=hashed_pw,
+        first_name=data.first_name,
+        last_name=data.last_name,
+        network_id=data.network_id,
+        church_id=data.church_id,
+        role=UserRole.unapproved,
+    )
 
     db.add(new_user)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid network or church",
+        )
+
     db.refresh(new_user)
 
     return {"message": "User registered successfully", "user_id": new_user.id}

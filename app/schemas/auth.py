@@ -1,10 +1,14 @@
-from pydantic import BaseModel, model_validator, field_validator
+from pydantic import BaseModel, field_validator
 
 
 class UserRegisterRequest(BaseModel):
+    first_name: str
+    last_name: str
     username: str
     password: str
     confirm_password: str
+    network_id: int
+    church_id: int
 
     @field_validator('username')
     def username_length(cls, v: str) -> str:
