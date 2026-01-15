@@ -18,7 +18,7 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         # Create user and network
         user = self._create_user(
@@ -27,7 +27,7 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         network = self._create_network(db_session)
 
         url = self._get_url(user_id=user.id, network_id=network.id)
-        response = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.post(url)
 
         # Check API response
         assert response.status_code == 201
@@ -51,13 +51,12 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
 
         response = client.post(
-            self._get_url(user_id=9999, network_id=network.id),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(user_id=9999, network_id=network.id)
         )
 
         assert response.status_code == 404
@@ -67,15 +66,14 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
         )
 
         response = client.post(
-            self._get_url(user_id=user.id, network_id=9999),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(user_id=user.id, network_id=9999)
         )
 
         assert response.status_code == 404
@@ -85,7 +83,7 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
@@ -95,11 +93,11 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         url = self._get_url(user.id, network.id)
 
         # First grant
-        response1 = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response1 = client.post(url)
         assert response1.status_code == 201
 
         # Second grant
-        response2 = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response2 = client.post(url)
         assert response2.status_code == 409
         assert response2.json()["detail"] == "User already has access to this network"
 
@@ -119,7 +117,7 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
@@ -127,7 +125,7 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         church = self._create_church(db_session, self._create_network(db_session))
 
         url = self._get_url(user_id=user.id, church_id=church.id)
-        response = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.post(url)
 
         assert response.status_code == 201
         data = response.json()
@@ -149,13 +147,12 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         church = self._create_church(db_session, self._create_network(db_session))
 
         response = client.post(
-            self._get_url(user_id=9999, church_id=church.id),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(user_id=9999, church_id=church.id)
         )
 
         assert response.status_code == 404
@@ -165,15 +162,14 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
         )
 
         response = client.post(
-            self._get_url(user_id=user.id, church_id=9999),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(user_id=user.id, church_id=9999)
         )
 
         assert response.status_code == 404
@@ -183,7 +179,7 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
@@ -193,11 +189,11 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         url = self._get_url(user.id, church.id)
 
         # First grant
-        response1 = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response1 = client.post(url)
         assert response1.status_code == 201
 
         # Second grant (duplicate)
-        response2 = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response2 = client.post(url)
         assert response2.status_code == 409
         assert response2.json()["detail"] == "User already has access to this church"
 
@@ -220,7 +216,7 @@ class TestGrantChurchActivityAccess(
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         # Create user and church activity
         user = self._create_user(
@@ -231,7 +227,7 @@ class TestGrantChurchActivityAccess(
         activity = self._create_church_activity(db_session, church)
 
         url = self._get_url(user_id=user.id, activity_id=activity.id)
-        response = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.post(url)
 
         # Check API response
         assert response.status_code == 201
@@ -255,15 +251,14 @@ class TestGrantChurchActivityAccess(
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
 
         response = client.post(
-            self._get_url(user_id=9999, activity_id=activity.id),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(user_id=9999, activity_id=activity.id)
         )
 
         assert response.status_code == 404
@@ -273,15 +268,14 @@ class TestGrantChurchActivityAccess(
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
         )
 
         response = client.post(
-            self._get_url(user_id=user.id, activity_id=9999),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(user_id=user.id, activity_id=9999)
         )
 
         assert response.status_code == 404
@@ -291,7 +285,7 @@ class TestGrantChurchActivityAccess(
         self._create_admin_user(
             db_session, username=self.username, password=self.password
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         user = self._create_user(
             db_session, username="regular_user", password="regular_password"
@@ -303,11 +297,11 @@ class TestGrantChurchActivityAccess(
         url = self._get_url(user.id, activity.id)
 
         # First grant
-        response1 = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response1 = client.post(url)
         assert response1.status_code == 201
 
         # Second grant (duplicate)
-        response2 = client.post(url, headers={"Authorization": f"Bearer {token}"})
+        response2 = client.post(url)
         assert response2.status_code == 409
         assert (
             response2.json()["detail"]

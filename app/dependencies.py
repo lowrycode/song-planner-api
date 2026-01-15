@@ -1,28 +1,24 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status, Cookie
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User, UserRole
 from app.utils.auth import verify_access_token
 
 
-# The OAuth2PasswordBearer dependency checks the authorization header
-# (expects format 'Authorization: Bearer <JWT>') and
-# - if found: returns raw JWT
-# - if not found: raises HTTPException (401 Not authenticated)
-# with response header 'WWW-Authenticate: Bearer'
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-
-
 # --- Authentication ---
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    access_token: str = Cookie(None), db: Session = Depends(get_db)
 ) -> User:
     """
     Used to verify identity and that user exists in DB.
     """
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
+
     # JWT to verify identity
-    payload = verify_access_token(token)
+    payload = verify_access_token(access_token)
     user_id = payload.get("sub")
 
     if user_id is None:

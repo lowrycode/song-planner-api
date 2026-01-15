@@ -54,15 +54,13 @@ class BaseTestHelpers:
     def _create_admin_user(self, db_session, username, password):
         return self._create_user(db_session, username, password, role=UserRole.admin)
 
-    def _get_access_token_from_login(self, client, username, password) -> str:
+    def _login(self, client, username, password):
         response = client.post(
             "/auth/login",
             data={"username": username, "password": password},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         assert response.status_code == 200
-        data = response.json()
-        return data["access_token"]
 
     def _create_song(
         self, db_session, first_line="Test Song", song_key="C", is_hymn=False
@@ -167,76 +165,50 @@ class BaseTestHelpers:
 
 
 class AuthTestsMixin:
-    http_method = "get"  # default can be overridden in parent class
+    http_method = "get"
 
-    def _request(self, client, url, token=None):
+    def _request(self, client, url):
         method = self.http_method.lower()
         request_fn = getattr(client, method)
-
-        if not hasattr(client, method):
-            raise ValueError(f"Unsupported HTTP method: {method}")
-
-        headers = {}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-
-        return request_fn(url, headers=headers)
+        return request_fn(url)
 
     def test_unauthorized_access_no_token(self, client):
-        # No token provided
         response = self._request(client, self.url)
         assert response.status_code == 401
 
     def test_unauthorized_access_invalid_token(self, client):
-        # Invalid token provided
-        response = self._request(client, self.url, token="invalidtoken")
+        # Simulate corrupted cookies
+        client.cookies.set("access_token", "invalidtoken")
+        client.cookies.set("refresh_token", "invalidtoken")
+
+        response = self._request(client, self.url)
         assert response.status_code == 401
-
-    def test_unapproved_role(self, client, db_session):
-        # Create user with insufficient role
-        self._create_user(
-            db_session,
-            username=self.username,
-            password=self.password,
-            role=UserRole.unapproved,
-        )
-        token = self._get_access_token_from_login(client, self.username, self.password)
-
-        # Request with valid token but unapproved role
-        response = self._request(client, self.url, token)
-        assert response.status_code == 403  # Forbidden
 
 
 class AdminAuthTestsMixin:
-    http_method = "get"  # default can be overridden in parent class
+    http_method = "get"
 
-    def _request(self, client, url, token):
+    def _request(self, client, url):
         method = self.http_method.lower()
-        request_fn = getattr(client, method)
-        return request_fn(
-            url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        return getattr(client, method)(url)
 
     def test_admin_user_allowed(self, client, db_session):
-        self._create_admin_user(
-            db_session, username=self.username, password=self.password
-        )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._create_admin_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
 
-        response = self._request(client, self.url, token)
+        response = self._request(client, self.url)
         assert response.status_code != 403
 
     def test_normal_user_denied(self, client, db_session):
         self._create_user(
             db_session,
-            username=self.username,
-            password=self.password,
+            self.username,
+            self.password,
             role=UserRole.normal,
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
-        response = self._request(client, self.url, token)
+        response = self._request(client, self.url)
         assert response.status_code == 403
 
     def test_editor_denied(self, client, db_session):
@@ -246,7 +218,7 @@ class AdminAuthTestsMixin:
             password=self.password,
             role=UserRole.editor,
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
-        response = self._request(client, self.url, token)
+        response = self._request(client, self.url)
         assert response.status_code == 403

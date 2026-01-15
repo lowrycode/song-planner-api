@@ -1,17 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from datetime import datetime, timedelta, timezone
-
 from app.database import get_db
 from app.models import User, RefreshToken, UserRole, Church, Network
 from app.schemas.auth import (
     UserRegisterRequest,
     UserRegisterResponse,
-    RefreshTokenRequest,
-    TokenResponse,
-    UserLogoutRequest,
+    UserLoginResponse,
     UserLogoutResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
@@ -28,6 +27,9 @@ from app.dependencies import require_min_role
 
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+IS_DEV = os.getenv("IS_DEV", False)
+SECURE = not IS_DEV  # Used for defining HTTP-only cookies
 
 
 @router.post("/register", status_code=201, response_model=UserRegisterResponse)
@@ -91,8 +93,12 @@ def register_user(data: UserRegisterRequest, db: Session = Depends(get_db)):
     return {"message": "User registered successfully", "user_id": new_user.id}
 
 
-@router.post("/login")
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@router.post("/login", response_model=UserLoginResponse)
+def login(
+    response: Response,
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
     user = db.query(User).filter(User.username == form.username).first()
 
     if not user or not verify_password(form.password, user.hashed_password):
@@ -101,12 +107,12 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     if user.role == UserRole.unapproved:
         raise HTTPException(status_code=403, detail="User account not approved")
 
-    # --- Create tokens ---
-    access = create_access_token({"sub": str(user.id)})
-    refresh = create_refresh_token()
-    refresh_hash = hash_token(refresh)
+    # Create tokens
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token()
+    refresh_hash = hash_token(refresh_token)
 
-    # --- Store in DB ---
+    # Store refresh token in DB
     db_token = RefreshToken(
         user_id=user.id,
         token_hash=refresh_hash,
@@ -116,12 +122,36 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     db.add(db_token)
     db.commit()
 
-    return {"access_token": access, "refresh_token": refresh}
+    # Set HttpOnly, Secure cookies
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/auth/refresh",  # Restrict path to refresh endpoint
+    )
+
+    return {"message": "Login successful"}
 
 
-@router.post("/refresh", response_model=TokenResponse)
-def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
-    refresh_hash = hash_token(request.refresh_token)
+@router.post("/refresh")
+def refresh_token(
+    response: Response,
+    refresh_token: str = Cookie(...),
+    db: Session = Depends(get_db),
+):
+    refresh_hash = hash_token(refresh_token)
 
     db_token = (
         db.query(RefreshToken)
@@ -138,32 +168,51 @@ def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_db)):
 
     user = db_token.user
 
-    # -------- ROTATION --------
-    db_token.revoked = True  # invalidate old token
+    # Revoke old refresh token
+    db_token.revoked = True
 
     new_refresh = create_refresh_token()
-    new_hash = hash_token(new_refresh)
+    new_refresh_hash = hash_token(new_refresh)
 
     db.add(
         RefreshToken(
             user_id=user.id,
-            token_hash=new_hash,
+            token_hash=new_refresh_hash,
             expires_at=datetime.now(timezone.utc)
             + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
-
     db.commit()
 
-    # issue new access token
-    new_access = create_access_token({"sub": user.username})
+    # Create new access token
+    new_access = create_access_token({"sub": str(user.id)})
 
-    return {"access_token": new_access, "refresh_token": new_refresh}
+    # Set new cookies
+    response.set_cookie(
+        key="access_token",
+        value=new_access,
+        httponly=True,
+        secure=SECURE,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh,
+        httponly=True,
+        secure=SECURE,
+        samesite="lax",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        path="/auth/refresh",
+    )
+
+    return {"message": "Tokens refreshed"}
 
 
 @router.post("/logout", response_model=UserLogoutResponse)
-def logout(request: UserLogoutRequest, db: Session = Depends(get_db)):
-    refresh_hash = hash_token(request.refresh_token)
+def logout(refresh_token: str = Cookie(...), db: Session = Depends(get_db)):
+    refresh_hash = hash_token(refresh_token)
     db_token = (
         db.query(RefreshToken).filter(RefreshToken.token_hash == refresh_hash).first()
     )
@@ -172,7 +221,11 @@ def logout(request: UserLogoutRequest, db: Session = Depends(get_db)):
         db_token.revoked = True
         db.commit()
 
-    return {"message": "Logged out"}
+    # Clear cookies by setting expired cookie headers
+    response = JSONResponse(content={"message": "Logged out"})
+    response.delete_cookie(key="access_token")
+    response.delete_cookie(key="refresh_token")
+    return response
 
 
 @router.post(

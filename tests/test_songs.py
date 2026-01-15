@@ -8,14 +8,11 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
     def test_list_songs_success(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         song = self._create_song(db_session)
 
-        response = client.get(
-            self.url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        response = client.get(self.url)
 
         assert response.status_code == 200
 
@@ -26,15 +23,14 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
     # Filters
     def test_filter_by_song_key(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         song_a = self._create_song(db_session, song_key="A")
         song_b = self._create_song(db_session, song_key="B")
 
         params = {"song_key": "A"}
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.status_code == 200
@@ -47,15 +43,14 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_by_song_type_hymn(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         hymn = self._create_song(db_session, is_hymn=True)
         song = self._create_song(db_session, is_hymn=False)
 
         params = {"song_type": "hymn"}
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.status_code == 200
@@ -68,15 +63,14 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_by_song_type_song(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         hymn = self._create_song(db_session, is_hymn=True)
         song = self._create_song(db_session, is_hymn=False)
 
         params = {"song_type": "song"}
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.status_code == 200
@@ -89,7 +83,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_by_lyric(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         song_match = self._create_song(db_session)
         self._create_lyrics(
@@ -107,8 +101,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
         params = {"lyric": "grace"}
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.status_code == 200
@@ -121,7 +114,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
     def test_combined_filters(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         song_match = self._create_song(db_session, song_key="A", is_hymn=True)
         self._create_lyrics(db_session, song_match, content="Amazing grace")
@@ -142,8 +135,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         }
 
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.status_code == 200
@@ -159,12 +151,11 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
     # Edge cases
     def test_no_songs_meet_criteria(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         params = {"song_key": "Z"}
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.status_code == 200
@@ -172,11 +163,10 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
 
     def test_unknown_query_parameter(self, client, db_session):
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         response = client.get(
-            f"{self.url}?unknown_param=123",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?unknown_param=123"
         )
 
         assert response.status_code == 200
@@ -187,7 +177,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_get_usage_summary_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church1 = self._create_church(
@@ -217,7 +207,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage_stats(db_session, song, church_activity1, old_date, new_date)
         self._create_usage_stats(db_session, song, church_activity2, new_date, new_date)
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
 
         assert response.status_code == 200
         data = response.json()
@@ -241,7 +231,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
     # Filters
     def test_filter_from_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -259,7 +249,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         activities = response.json()[0]["activities"]
@@ -267,7 +257,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_to_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -285,7 +275,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         activities = response.json()[0]["activities"]
@@ -293,7 +283,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_church_activity_id_multiple(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -339,7 +329,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         ]
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         activities = response.json()[0]["activities"]
@@ -348,7 +338,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_song_type_hymn(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -370,7 +360,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"song_type": "hymn"}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -379,7 +369,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_song_key(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -401,7 +391,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"song_key": "C"}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -410,7 +400,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_lyric(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -435,7 +425,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"lyric": "grace"}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -444,7 +434,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_first_used_in_range(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -468,7 +458,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         # first_used is outside range → excluded
@@ -476,7 +466,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_last_used_in_range(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -500,7 +490,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         # last_used is outside range → excluded
@@ -508,7 +498,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_first_and_last_used_in_range(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -546,7 +536,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -555,7 +545,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_used_in_range_includes_song(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -579,8 +569,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
 
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         data = response.json()
@@ -589,7 +578,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_used_in_range_excludes_song(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -611,15 +600,14 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
 
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         assert response.json() == []
 
     def test_filter_used_and_first_used_in_range(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -657,8 +645,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
 
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         data = response.json()
@@ -667,7 +654,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_used_and_last_used_in_range(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -697,8 +684,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
 
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         data = response.json()
@@ -707,7 +693,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_combined_song_and_date_filters(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -732,8 +718,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         }
 
         response = client.get(
-            f"{self.url}?{urlencode(params)}",
-            headers={"Authorization": f"Bearer {token}"},
+            f"{self.url}?{urlencode(params)}"
         )
 
         data = response.json()
@@ -743,7 +728,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
     # Edge cases
     def test_song_without_usage_stats_is_included(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -757,7 +742,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song_used, church_activity, date.today(), date.today()
         )
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
         data = response.json()
 
         ids = [s["id"] for s in data]
@@ -766,7 +751,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_zero_usage_activites_are_included(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -785,7 +770,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song, activity_used, date.today(), date.today()
         )
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
         data = response.json()[0]["activities"]
 
         assert data[activity_used.slug]["usage_count"] == 1
@@ -810,7 +795,7 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
     def test_get_song_full_details_success(self, client, db_session):
         # Setup user and login
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         # Create song with lyrics and resources (one-to-one)
         song = self._create_song(db_session)
@@ -821,7 +806,7 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
         db_session.refresh(resources)
 
         url = self._get_url(song.id)
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
 
         assert response.status_code == 200
 
@@ -837,12 +822,12 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
     def test_get_song_full_details_not_found(self, client, db_session):
         # Setup user and login
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         # Use an invalid/nonexistent song_id
         invalid_id = 999999
         url = self._get_url(invalid_id)
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Song not found"
@@ -850,11 +835,11 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
     def test_song_id_validation_error(self, client, db_session):
         # Setup user and login
         self._create_user(db_session, username=self.username, password=self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         invalid_id = "notanumber"
         url = self._get_url(invalid_id)
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 422
 
 
@@ -870,7 +855,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
     def test_get_song_usages_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -885,8 +870,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, church_activity, new_usage_date)
 
         response = client.get(
-            self._get_url(song.id),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(song.id)
         )
 
         assert response.status_code == 200
@@ -898,13 +882,12 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
     def test_song_usages_empty_list(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         song = self._create_song(db_session)
 
         response = client.get(
-            self._get_url(song.id),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(song.id)
         )
 
         assert response.status_code == 200
@@ -912,11 +895,10 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
     def test_get_song_usages_song_not_found(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         response = client.get(
-            self._get_url(999999),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url(999999)
         )
 
         assert response.status_code == 404
@@ -924,18 +906,17 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
     def test_get_song_usages_invalid_id_validation(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         response = client.get(
-            self._get_url("notanumber"),
-            headers={"Authorization": f"Bearer {token}"},
+            self._get_url("notanumber")
         )
 
         assert response.status_code == 422
 
     def test_filter_from_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -958,7 +939,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -967,7 +948,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_to_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -990,7 +971,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -999,7 +980,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_church_activity_id(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1026,7 +1007,7 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         ]
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         returned_ids = {u["church_activity_id"] for u in response.json()}
@@ -1038,7 +1019,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
     def test_key_summary_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1051,10 +1032,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song_c, activity)
         self._create_usage(db_session, song_d, activity)
 
-        response = client.get(
-            self.url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        response = client.get(self.url)
 
         assert response.status_code == 200
         data = response.json()
@@ -1064,7 +1042,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_from_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1081,7 +1059,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
@@ -1090,7 +1068,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_to_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1107,7 +1085,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
@@ -1116,7 +1094,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_multiple_church_activity_ids(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1139,7 +1117,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         ]
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
@@ -1148,7 +1126,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
     def test_unique_true_counts_distinct_songs(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1162,7 +1140,7 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         params = {"unique": "true"}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
 
         assert response.status_code == 200
         data = response.json()
@@ -1175,7 +1153,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_get_type_summary_success(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1197,7 +1175,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, normal_song, activity, date.today(), date.today()
         )
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
 
         assert response.status_code == 200
         data = response.json()
@@ -1208,7 +1186,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_from_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1226,7 +1204,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
         data = response.json()
         assert data["hymn"] == 1  # Only the usage after from_date counts
@@ -1234,7 +1212,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_to_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1252,7 +1230,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
         data = response.json()
         assert data["song"] == 1  # Only usage before to_date counts
@@ -1260,7 +1238,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_church_activity_id_multiple(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1296,7 +1274,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         ]
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
         data = response.json()
 
@@ -1305,7 +1283,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_unique_true_counts_distinct_songs(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1331,7 +1309,7 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         params = {"unique": "true"}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
         data = response.json()
 
@@ -1340,9 +1318,9 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 
     def test_no_usage_returns_zero_counts(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
         assert response.status_code == 200
         data = response.json()
 
@@ -1355,7 +1333,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
 
     def test_success_single_activity_counts(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1381,7 +1359,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
             db_session, song2, activity, date.today(), date.today()
         )
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
         assert response.status_code == 200
 
         data = response.json()
@@ -1395,7 +1373,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
 
     def test_multiple_activities_return_multiple_rows(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1425,7 +1403,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
             db_session, song, activity2, date.today(), date.today()
         )
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
         assert response.status_code == 200
 
         data = response.json()
@@ -1436,7 +1414,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_by_church_activity_id(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1469,7 +1447,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
         params = [("church_activity_id", activity1.id)]
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -1478,7 +1456,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
 
     def test_filter_from_date(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -1499,7 +1477,7 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
-        response = client.get(url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(url)
         assert response.status_code == 200
 
         data = response.json()
@@ -1508,8 +1486,8 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
 
     def test_no_usage_returns_empty_list(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
-        response = client.get(self.url, headers={"Authorization": f"Bearer {token}"})
+        response = client.get(self.url)
         assert response.status_code == 200
         assert response.json() == []

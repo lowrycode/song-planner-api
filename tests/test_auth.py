@@ -257,9 +257,8 @@ class TestLoginUser(BaseTestHelpers):
         form_data = self._get_form_data(username=user.username, password=password)
         response = client.post(self.login_url, data=form_data)
         assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-        assert "refresh_token" in data
+        assert "access_token" in response.cookies
+        assert "refresh_token" in response.cookies
 
         # Check refresh token stored in DB
         token_in_db = (
@@ -300,6 +299,21 @@ class TestLoginUser(BaseTestHelpers):
         assert response.status_code == 400
         assert response.json()["detail"] == "Invalid credentials"
 
+    def test_unapproved_user_cannot_login(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            role=UserRole.unapproved,
+        )
+
+        response = client.post(
+            "/auth/login",
+            data={"username": self.username, "password": self.password},
+        )
+
+        assert response.status_code == 403
+
 
 class TestRefreshToken(BaseTestHelpers):
     refresh_url = "/auth/refresh"
@@ -332,19 +346,22 @@ class TestRefreshToken(BaseTestHelpers):
         old_token_str, old_token = self._create_refresh_token(db_session, user)
 
         # Check API refresh
-        response = client.post(self.refresh_url, json={"refresh_token": old_token_str})
+        client.cookies.set("refresh_token", old_token_str)
+        response = client.post(self.refresh_url)
+
         assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-        assert "refresh_token" in data
-        assert data["refresh_token"] != old_token_str  # new refresh token issued
+        assert "access_token" in response.cookies
+        assert "refresh_token" in response.cookies
+        assert (
+            response.cookies["refresh_token"] != old_token_str
+        )  # new refresh token issued
 
         # Check old token revoked
         db_session.refresh(old_token)
         assert old_token.revoked is True
 
         # Check new token stored in DB
-        new_token_hash = hash_token(data["refresh_token"])
+        new_token_hash = hash_token(response.cookies["refresh_token"])
         new_token = (
             db_session.query(RefreshToken)
             .filter(RefreshToken.token_hash == new_token_hash)
@@ -363,7 +380,9 @@ class TestRefreshToken(BaseTestHelpers):
 
         # Check refresh API using a random invalid refresh token string
         invalid_token = "invalidtokenstring"
-        response = client.post(self.refresh_url, json={"refresh_token": invalid_token})
+        client.cookies.set("refresh_token", invalid_token)
+        response = client.post(self.refresh_url)
+
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid refresh token"
 
@@ -375,7 +394,8 @@ class TestRefreshToken(BaseTestHelpers):
         token_str, token = self._create_refresh_token(db_session, user, revoked=True)
 
         # Check refresh API using revoked token
-        response = client.post(self.refresh_url, json={"refresh_token": token_str})
+        client.cookies.set("refresh_token", token_str)
+        response = client.post(self.refresh_url)
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid refresh token"
 
@@ -390,7 +410,8 @@ class TestRefreshToken(BaseTestHelpers):
         )
 
         # Check refresh API using expired token
-        response = client.post(self.refresh_url, json={"refresh_token": token_str})
+        client.cookies.set("refresh_token", token_str)
+        response = client.post(self.refresh_url)
         assert response.status_code == 401
         assert response.json()["detail"] == "Invalid refresh token"
 
@@ -426,10 +447,8 @@ class TestLogout(BaseTestHelpers):
         token_str, token = self._create_refresh_token(db_session, user)
 
         # Logout with API
-        response = client.post(
-            self.logout_url,
-            json={"refresh_token": token_str},
-        )
+        client.cookies.set("refresh_token", token_str)
+        response = client.post(self.logout_url)
         assert response.status_code == 200
         assert response.json()["message"] == "Logged out"
 
@@ -450,10 +469,8 @@ class TestLogout(BaseTestHelpers):
         invalid_token = "thisisnotavalidtoken"
 
         # Logout with API
-        response = client.post(
-            self.logout_url,
-            json={"refresh_token": invalid_token},
-        )
+        client.cookies.set("refresh_token", invalid_token)
+        response = client.post(self.logout_url)
         assert response.status_code == 200
         assert response.json()["message"] == "Logged out"
 
@@ -471,10 +488,8 @@ class TestLogout(BaseTestHelpers):
         token_str, token = self._create_refresh_token(db_session, user, revoked=True)
 
         # Logout with API
-        response = client.post(
-            self.logout_url,
-            json={"refresh_token": token_str},
-        )
+        client.cookies.set("refresh_token", token_str)
+        response = client.post(self.logout_url)
         assert response.status_code == 200
         assert response.json()["message"] == "Logged out"
 
@@ -509,50 +524,50 @@ class TestChangePassword(BaseTestHelpers):
             "confirm_new_password": confirm_new_password,
         }
 
-    def _auth_headers(self, client, db_session):
+    # -------- Tests --------
+    def test_change_password_success(self, client, db_session):
         self._create_user(
             db_session,
             username=self.username,
             password=self.password,
         )
-        token = self._get_access_token_from_login(client, self.username, self.password)
-        return {"Authorization": f"Bearer {token}"}
-
-    # -------- Tests --------
-    def test_change_password_success(self, client, db_session):
-        headers = self._auth_headers(client, db_session)
+        self._login(client, self.username, self.password)
 
         response = client.post(
             self.url,
             json=self._payload(),
-            headers=headers,
         )
-
         assert response.status_code == 200
         assert response.json()["message"] == "Password changed successfully"
 
     def test_change_password_invalid_current_password(self, client, db_session):
-        headers = self._auth_headers(client, db_session)
-
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
         response = client.post(
             self.url,
             json=self._payload(current_password="wrongpassword"),
-            headers=headers,
         )
 
         assert response.status_code == 400
         assert "Current password is incorrect" in response.json()["detail"]
 
     def test_change_password_passwords_do_not_match(self, client, db_session):
-        headers = self._auth_headers(client, db_session)
-
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
         response = client.post(
             self.url,
             json=self._payload(
                 new_password="newpassword123",
                 confirm_new_password="differentpassword",
             ),
-            headers=headers,
         )
 
         assert response.status_code == 400
@@ -560,15 +575,18 @@ class TestChangePassword(BaseTestHelpers):
         assert "Passwords do not match" in msg
 
     def test_change_password_reuse_same_password(self, client, db_session):
-        headers = self._auth_headers(client, db_session)
-
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
         response = client.post(
             self.url,
             json=self._payload(
                 new_password=self.password,
                 confirm_new_password=self.password,
             ),
-            headers=headers,
         )
 
         assert response.status_code == 409
@@ -581,10 +599,14 @@ class TestChangePassword(BaseTestHelpers):
             password=self.password,
         )
 
-        token = self._get_access_token_from_login(client, self.username, self.password)
-        headers = {"Authorization": f"Bearer {token}"}
+        # Login (cookies persist automatically on client)
+        response = client.post(
+            "/auth/login",
+            data={"username": self.username, "password": self.password},
+        )
+        assert response.status_code == 200
 
-        # Create refresh tokens - simulate 2 devices
+        # Create refresh tokens - simulate 2 other devices
         for _ in range(2):
             refresh = create_refresh_token()
             db_session.add(
@@ -597,10 +619,10 @@ class TestChangePassword(BaseTestHelpers):
             )
         db_session.commit()
 
+        # Change password
         response = client.post(
             self.url,
             json=self._payload(),
-            headers=headers,
         )
 
         assert response.status_code == 200
@@ -620,8 +642,12 @@ class TestChangePassword(BaseTestHelpers):
         assert response.status_code == 401
 
     def test_change_password_new_password_too_short(self, client, db_session):
-        headers = self._auth_headers(client, db_session)
-
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
         short_password = "abcd"  # 4 chars, less than min length 5
         response = client.post(
             self.url,
@@ -629,7 +655,6 @@ class TestChangePassword(BaseTestHelpers):
                 new_password=short_password,
                 confirm_new_password=short_password,
             ),
-            headers=headers,
         )
 
         assert response.status_code == 422
@@ -637,8 +662,12 @@ class TestChangePassword(BaseTestHelpers):
         assert any("Password must be between" in err["msg"] for err in errors)
 
     def test_change_password_new_password_too_long(self, client, db_session):
-        headers = self._auth_headers(client, db_session)
-
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
         long_password = "a" * 21  # 21 chars, more than max length 20
         response = client.post(
             self.url,
@@ -646,7 +675,6 @@ class TestChangePassword(BaseTestHelpers):
                 new_password=long_password,
                 confirm_new_password=long_password,
             ),
-            headers=headers,
         )
 
         assert response.status_code == 422

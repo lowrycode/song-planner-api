@@ -28,21 +28,12 @@ class UserRegisterResponse(BaseModel):
     message: str
 
 
-class UserLogoutRequest(BaseModel):
-    refresh_token: str
+class UserLoginResponse(BaseModel):
+    message: str
 
 
 class UserLogoutResponse(BaseModel):
     message: str
-
-
-class RefreshTokenRequest(BaseModel):
-    refresh_token: str
-
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
 
 
 class ChangePasswordRequest(BaseModel):

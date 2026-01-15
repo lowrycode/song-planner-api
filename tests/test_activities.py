@@ -7,7 +7,7 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
     def test_list_viewable_church_activities_success(self, client, db_session):
         # Create user and authenticate
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -31,10 +31,7 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
         activity2.id = 2
         db_session.commit()
 
-        response = client.get(
-            self.url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        response = client.get(self.url)
 
         assert response.status_code == 200
         data = response.json()
@@ -44,7 +41,7 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
 
     def test_activities_are_sorted_by_name(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -67,10 +64,7 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
         activity_a.id = 2
         db_session.commit()
 
-        response = client.get(
-            self.url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        response = client.get(self.url)
 
         assert response.status_code == 200
         data = response.json()
@@ -80,7 +74,7 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
 
     def test_non_viewable_activities_are_excluded(self, client, db_session):
         self._create_user(db_session, self.username, self.password)
-        token = self._get_access_token_from_login(client, self.username, self.password)
+        self._login(client, self.username, self.password)
 
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
@@ -105,10 +99,7 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
 
         db_session.commit()
 
-        response = client.get(
-            self.url,
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        response = client.get(self.url)
 
         assert response.status_code == 200
         data = response.json()
