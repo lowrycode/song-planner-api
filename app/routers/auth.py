@@ -99,7 +99,7 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
     # --- Create tokens ---
-    access = create_access_token({"sub": user.username})
+    access = create_access_token({"sub": str(user.id)})
     refresh = create_refresh_token()
     refresh_hash = hash_token(refresh)
 

@@ -23,15 +23,23 @@ def get_current_user(
     """
     # JWT to verify identity
     payload = verify_access_token(token)
-    username: str = payload.get("sub")
-    if username is None:
+    user_id = payload.get("sub")
+
+    if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
         )
 
-    # Check user still exists in the database
-    user = db.query(User).filter(User.username == username).first()
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=403, detail="User no longer exists")
 
@@ -43,6 +51,7 @@ def require_min_role(min_role: UserRole):
     """
     Returns a dependency that verifies the user's role meets the minimum required role.
     """
+
     def dependency(user: User = Depends(get_current_user)) -> User:
         if user.role < min_role:
             raise HTTPException(status_code=403, detail="Forbidden")
