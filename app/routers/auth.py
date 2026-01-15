@@ -98,6 +98,9 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
     if not user or not verify_password(form.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Invalid credentials")
 
+    if user.role == UserRole.unapproved:
+        raise HTTPException(status_code=403, detail="User account not approved")
+
     # --- Create tokens ---
     access = create_access_token({"sub": str(user.id)})
     refresh = create_refresh_token()
