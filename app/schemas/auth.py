@@ -36,6 +36,14 @@ class UserLogoutResponse(BaseModel):
     message: str
 
 
+class UserMeResponse(BaseModel):
+    id: int
+    username: str
+    first_name: str | None
+    last_name: str | None
+    role: str
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str

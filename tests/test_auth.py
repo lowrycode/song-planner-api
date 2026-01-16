@@ -678,3 +678,30 @@ class TestChangePassword(BaseTestHelpers):
         assert response.status_code == 422
         errors = response.json()["detail"]
         assert any("Password must be between" in err["msg"] for err in errors)
+
+
+class TestGetMe(BaseTestHelpers):
+    url = "/auth/me"
+
+    def test_me_authenticated(self, client, db_session):
+        """Authenticated user can retrieve their info."""
+        user = self._create_user(
+            db_session, username=self.username, password=self.password
+        )
+
+        # Use _login helper to authenticate and set cookies
+        self._login(client, username=self.username, password=self.password)
+
+        response = client.get(self.url)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["username"] == self.username
+        assert data["id"] == user.id
+        assert data["first_name"] == user.first_name
+        assert data["last_name"] == user.last_name
+        assert data["role"] == UserRole(user.role).name
+
+    def test_me_unauthenticated(self, client):
+        """Unauthenticated requests return 401."""
+        response = client.get(self.url)
+        assert response.status_code == 401

@@ -1,6 +1,5 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,6 +11,7 @@ from app.schemas.auth import (
     UserRegisterResponse,
     UserLoginResponse,
     UserLogoutResponse,
+    UserMeResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
 )
@@ -23,7 +23,7 @@ from app.utils.auth import (
     verify_password,
 )
 from app.settings import settings
-from app.dependencies import require_min_role
+from app.dependencies import require_min_role, get_current_user
 
 router = APIRouter()
 
@@ -275,3 +275,17 @@ def change_password(
     db.commit()
 
     return {"message": "Password changed successfully"}
+
+
+@router.get("/me", response_model=UserMeResponse)
+def get_me(user: User = Depends(get_current_user)):
+    """
+    Returns info about the currently authenticated user based on access_token cookie.
+    """
+    return UserMeResponse(
+        id=user.id,
+        username=user.username,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=UserRole(user.role).name,
+    )
