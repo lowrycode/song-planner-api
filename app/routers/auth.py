@@ -234,12 +234,10 @@ def logout(
     return {"message": "Logged out"}
 
 
-@router.post(
-    "/change-password",
-    response_model=ChangePasswordResponse,
-)
+@router.post("/change-password", response_model=ChangePasswordResponse)
 def change_password(
     data: ChangePasswordRequest,
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
@@ -266,13 +264,17 @@ def change_password(
     # Hash and save new password
     user.hashed_password = hash_password(data.new_password)
 
-    # Revoke all existing refresh tokens for this user
+    # Revoke ALL refresh tokens (all devices)
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user.id,
         RefreshToken.revoked == False,
     ).update({"revoked": True})
 
     db.commit()
+
+    # Clear cookies for current device
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/auth/refresh")
 
     return {"message": "Password changed successfully"}
 

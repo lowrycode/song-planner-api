@@ -617,6 +617,11 @@ class TestChangePassword(BaseTestHelpers):
             )
         db_session.commit()
 
+        tokens = (
+            db_session.query(RefreshToken).filter(RefreshToken.user_id == user.id).all()
+        )
+        assert len(tokens) >= 3
+
         # Change password
         response = client.post(
             self.url,
@@ -678,6 +683,81 @@ class TestChangePassword(BaseTestHelpers):
         assert response.status_code == 422
         errors = response.json()["detail"]
         assert any("Password must be between" in err["msg"] for err in errors)
+
+    def test_change_password_clears_auth_cookies(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
+
+        response = client.post(
+            self.url,
+            json=self._payload(),
+        )
+
+        assert response.status_code == 200
+
+        # Cookies should be cleared
+        cookies = response.headers.get_list("set-cookie")
+        assert any('access_token=""' in c or 'access_token=;' in c for c in cookies)
+        assert any('refresh_token=""' in c or 'refresh_token=;' in c for c in cookies)
+
+    def test_old_password_no_longer_valid(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+
+        self._login(client, self.username, self.password)
+
+        client.post(self.url, json=self._payload())
+
+        # Try logging in with old password
+        response = client.post(
+            "/auth/login",
+            data={"username": self.username, "password": self.password},
+        )
+
+        assert response.status_code == 400
+
+    def test_new_password_works_after_change(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+
+        self._login(client, self.username, self.password)
+
+        new_password = "newpassword123"
+        client.post(
+            self.url,
+            json=self._payload(new_password=new_password),
+        )
+
+        response = client.post(
+            "/auth/login",
+            data={"username": self.username, "password": new_password},
+        )
+
+        assert response.status_code == 200
+
+    def test_access_token_invalid_after_password_change(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
+
+        client.post(self.url, json=self._payload())
+
+        # Try hitting an authenticated endpoint
+        response = client.get("/auth/me")
+        assert response.status_code == 401
 
 
 class TestGetMe(BaseTestHelpers):
