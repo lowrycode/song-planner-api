@@ -497,15 +497,13 @@ class TestLogout(BaseTestHelpers):
         db_session.refresh(token)
         assert token.revoked is True
 
-    def test_logout_missing_token(self, client, db_session):
+    def test_logout_missing_token(self, client):
         """
-        Logout without providing a refresh token should fail validation.
+        Logout without a refresh token should succeed (idempotent).
         """
-
         response = client.post(self.logout_url)
-
-        # FastAPI will return a 422 validation error
-        assert response.status_code == 422
+        assert response.status_code == 200
+        assert response.json()["message"] == "Logged out"
 
 
 class TestChangePassword(BaseTestHelpers):

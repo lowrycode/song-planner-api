@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Cookie
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordRequestForm
 from datetime import datetime, timedelta, timezone
 from app.database import get_db
 from app.models import User, RefreshToken, UserRole, Church, Network
@@ -26,7 +26,6 @@ from app.settings import settings
 from app.dependencies import require_min_role
 
 router = APIRouter()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 IS_DEV = os.getenv("IS_DEV", False)
 SECURE = not IS_DEV  # Used for defining HTTP-only cookies
@@ -211,21 +210,28 @@ def refresh_token(
 
 
 @router.post("/logout", response_model=UserLogoutResponse)
-def logout(refresh_token: str = Cookie(...), db: Session = Depends(get_db)):
-    refresh_hash = hash_token(refresh_token)
-    db_token = (
-        db.query(RefreshToken).filter(RefreshToken.token_hash == refresh_hash).first()
-    )
+def logout(
+    response: Response,
+    refresh_token: str | None = Cookie(None),
+    db: Session = Depends(get_db),
+):
+    if refresh_token:
+        refresh_hash = hash_token(refresh_token)
+        db_token = (
+            db.query(RefreshToken)
+            .filter(RefreshToken.token_hash == refresh_hash)
+            .first()
+        )
 
-    if db_token:
-        db_token.revoked = True
-        db.commit()
+        if db_token:
+            db_token.revoked = True
+            db.commit()
 
-    # Clear cookies by setting expired cookie headers
-    response = JSONResponse(content={"message": "Logged out"})
-    response.delete_cookie(key="access_token")
-    response.delete_cookie(key="refresh_token")
-    return response
+    # Always clear cookies
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/auth/refresh")
+
+    return {"message": "Logged out"}
 
 
 @router.post(
