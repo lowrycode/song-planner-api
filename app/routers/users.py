@@ -11,7 +11,7 @@ from app.models import (
     UserChurchAccess,
     UserChurchActivityAccess,
 )
-from app.schemas.admin import (
+from app.schemas.users import (
     GrantNetworkAccessResponse,
     GrantChurchAccessResponse,
     GrantChurchActivityAccessResponse,
@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 @router.post(
-    "/users/{user_id}/access/networks/{network_id}",
+    "/{user_id}/access/networks/{network_id}",
     status_code=201,
     response_model=GrantNetworkAccessResponse,
 )
@@ -71,7 +71,7 @@ def grant_network_access(
 
 
 @router.post(
-    "/users/{user_id}/access/churches/{church_id}",
+    "/{user_id}/access/churches/{church_id}",
     status_code=201,
     response_model=GrantChurchAccessResponse,
 )
@@ -116,7 +116,7 @@ def grant_church_access(
 
 
 @router.post(
-    "/users/{user_id}/access/activities/{activity_id}",
+    "/{user_id}/access/activities/{activity_id}",
     status_code=201,
     response_model=GrantChurchActivityAccessResponse,
 )

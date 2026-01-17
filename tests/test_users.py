@@ -3,7 +3,7 @@ from app.models import UserNetworkAccess, UserChurchAccess, UserChurchActivityAc
 
 
 class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
-    url_template = "/admin/users/{user_id}/access/networks/{network_id}"
+    url_template = "/users/{user_id}/access/networks/{network_id}"
     http_method = "post"  # override variable in AdminAuthTestsMixin
 
     def _get_url(self, user_id: int, network_id: int) -> str:
@@ -103,7 +103,7 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
 
 
 class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
-    url_template = "/admin/users/{user_id}/access/churches/{church_id}"
+    url_template = "/users/{user_id}/access/churches/{church_id}"
     http_method = "post"  # override variable in AdminAuthTestsMixin
 
     def _get_url(self, user_id: int, church_id: int) -> str:
@@ -201,7 +201,7 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
 class TestGrantChurchActivityAccess(
     BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
 ):
-    url_template = "/admin/users/{user_id}/access/activities/{activity_id}"
+    url_template = "/users/{user_id}/access/activities/{activity_id}"
     http_method = "post"  # override variable in AdminAuthTestsMixin
 
     def _get_url(self, user_id: int, activity_id: int) -> str:
