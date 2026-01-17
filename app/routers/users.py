@@ -23,7 +23,7 @@ router = APIRouter()
 
 @router.post(
     "/{user_id}/access/networks/{network_id}",
-    status_code=201,
+    status_code=status.HTTP_201_CREATED,
     response_model=GrantNetworkAccessResponse,
 )
 def grant_network_access(
@@ -70,9 +70,32 @@ def grant_network_access(
     }
 
 
+@router.delete(
+    "/{user_id}/access/networks/{network_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_network_access(
+    user_id: int,
+    network_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.admin)),
+):
+    access = (
+        db.query(UserNetworkAccess)
+        .filter_by(user_id=user_id, network_id=network_id)
+        .first()
+    )
+
+    if not access:
+        raise HTTPException(status_code=404, detail="Access not found")
+
+    db.delete(access)
+    db.commit()
+
+
 @router.post(
     "/{user_id}/access/churches/{church_id}",
-    status_code=201,
+    status_code=status.HTTP_201_CREATED,
     response_model=GrantChurchAccessResponse,
 )
 def grant_church_access(
@@ -115,9 +138,32 @@ def grant_church_access(
     }
 
 
+@router.delete(
+    "/{user_id}/access/churches/{church_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_church_access(
+    user_id: int,
+    church_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.admin)),
+):
+    access = (
+        db.query(UserChurchAccess)
+        .filter_by(user_id=user_id, church_id=church_id)
+        .first()
+    )
+
+    if not access:
+        raise HTTPException(status_code=404, detail="Access not found")
+
+    db.delete(access)
+    db.commit()
+
+
 @router.post(
     "/{user_id}/access/activities/{activity_id}",
-    status_code=201,
+    status_code=status.HTTP_201_CREATED,
     response_model=GrantChurchActivityAccessResponse,
 )
 def grant_church_activity_access(
@@ -162,3 +208,26 @@ def grant_church_activity_access(
         "user_id": user_id,
         "activity_id": activity_id,
     }
+
+
+@router.delete(
+    "/{user_id}/access/activities/{activity_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def remove_church_activity_access(
+    user_id: int,
+    activity_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.admin)),
+):
+    access = (
+        db.query(UserChurchActivityAccess)
+        .filter_by(user_id=user_id, church_activity_id=activity_id)
+        .first()
+    )
+
+    if not access:
+        raise HTTPException(status_code=404, detail="Access not found")
+
+    db.delete(access)
+    db.commit()

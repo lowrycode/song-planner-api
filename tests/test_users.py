@@ -102,6 +102,70 @@ class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixi
         assert response2.json()["detail"] == "User already has access to this network"
 
 
+class TestRemoveNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
+    url_template = "/users/{user_id}/access/networks/{network_id}"
+    http_method = "delete"  # override variable in AdminAuthTestsMixin
+
+    def _get_url(self, user_id: int, network_id: int) -> str:
+        return self.url_template.format(user_id=user_id, network_id=network_id)
+
+    @property  # used for authentication mixins only
+    def url(self):
+        return self._get_url(user_id=1, network_id=1)
+
+    def test_remove_network_access_success(self, client, db_session):
+        # Create admin user and login
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        # Create user and network
+        user = self._create_user(
+            db_session, username="regular_user", password="regular_password"
+        )
+        network = self._create_network(db_session)
+
+        # Grant access first
+        db_session.add(
+            UserNetworkAccess(user_id=user.id, network_id=network.id)
+        )
+        db_session.commit()
+
+        url = self._get_url(user.id, network.id)
+        response = client.delete(url)
+
+        # Check API response
+        assert response.status_code == 204
+        assert response.content == b""
+
+        # Check database
+        access = (
+            db_session.query(UserNetworkAccess)
+            .filter_by(user_id=user.id, network_id=network.id)
+            .first()
+        )
+        assert access is None
+
+    def test_remove_network_access_not_found(self, client, db_session):
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        user = self._create_user(
+            db_session, username="regular_user", password="regular_password"
+        )
+        network = self._create_network(db_session)
+
+        response = client.delete(
+            self._get_url(user_id=user.id, network_id=network.id)
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Access not found"
+
+
 class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
     url_template = "/users/{user_id}/access/churches/{church_id}"
     http_method = "post"  # override variable in AdminAuthTestsMixin
@@ -196,6 +260,73 @@ class TestGrantChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         response2 = client.post(url)
         assert response2.status_code == 409
         assert response2.json()["detail"] == "User already has access to this church"
+
+
+class TestRemoveChurchAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
+    url_template = "/users/{user_id}/access/churches/{church_id}"
+    http_method = "delete"  # override variable in AdminAuthTestsMixin
+
+    def _get_url(self, user_id: int, church_id: int) -> str:
+        return self.url_template.format(user_id=user_id, church_id=church_id)
+
+    @property  # used for authentication mixins only
+    def url(self):
+        return self._get_url(user_id=1, church_id=1)
+
+    def test_remove_church_access_success(self, client, db_session):
+        # Create admin user and login
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        # Create user, network and church
+        user = self._create_user(
+            db_session, username="regular_user", password="regular_password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        # Grant access first
+        db_session.add(
+            UserChurchAccess(user_id=user.id, church_id=church.id)
+        )
+        db_session.commit()
+
+        url = self._get_url(user.id, church.id)
+        response = client.delete(url)
+
+        # Check API response
+        assert response.status_code == 204
+        assert response.content == b""
+
+        # Check database
+        access = (
+            db_session.query(UserChurchAccess)
+            .filter_by(user_id=user.id, church_id=church.id)
+            .first()
+        )
+        assert access is None
+
+    def test_remove_church_access_not_found(self, client, db_session):
+        # Create admin user and login
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        user = self._create_user(
+            db_session, username="regular_user", password="regular_password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        response = client.delete(
+            self._get_url(user_id=user.id, church_id=church.id)
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Access not found"
 
 
 class TestGrantChurchActivityAccess(
@@ -307,3 +438,84 @@ class TestGrantChurchActivityAccess(
             response2.json()["detail"]
             == "User already has access to this church activity"
         )
+
+
+class TestRemoveChurchActivityAccess(
+    BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
+):
+    url_template = "/users/{user_id}/access/activities/{activity_id}"
+    http_method = "delete"  # override variable in AdminAuthTestsMixin
+
+    def _get_url(self, user_id: int, activity_id: int) -> str:
+        return self.url_template.format(
+            user_id=user_id, activity_id=activity_id
+        )
+
+    @property  # used for authentication mixins only
+    def url(self):
+        return self._get_url(user_id=1, activity_id=1)
+
+    def test_remove_church_activity_access_success(self, client, db_session):
+        # Create admin user and login
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        # Create user and activity
+        user = self._create_user(
+            db_session, username="regular_user", password="regular_password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        # Grant access first
+        db_session.add(
+            UserChurchActivityAccess(
+                user_id=user.id,
+                church_activity_id=activity.id,
+            )
+        )
+        db_session.commit()
+
+        url = self._get_url(user.id, activity.id)
+        response = client.delete(url)
+
+        # Check API response
+        assert response.status_code == 204
+        assert response.content == b""
+
+        # Check database
+        access = (
+            db_session.query(UserChurchActivityAccess)
+            .filter_by(
+                user_id=user.id,
+                church_activity_id=activity.id,
+            )
+            .first()
+        )
+        assert access is None
+
+    def test_remove_church_activity_access_not_found(
+        self, client, db_session
+    ):
+        # Create admin user and login
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        user = self._create_user(
+            db_session, username="regular_user", password="regular_password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        response = client.delete(
+            self._get_url(user_id=user.id, activity_id=activity.id)
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Access not found"
