@@ -62,6 +62,23 @@ class User(Base):
     refreshtokens = relationship(
         "RefreshToken", back_populates="user", cascade="all, delete-orphan"
     )
+    network_accesses = relationship(
+        "UserNetworkAccess",
+        back_populates="user",
+        passive_deletes=True,
+    )
+
+    church_accesses = relationship(
+        "UserChurchAccess",
+        back_populates="user",
+        passive_deletes=True,
+    )
+
+    activity_accesses = relationship(
+        "UserChurchActivityAccess",
+        back_populates="user",
+        passive_deletes=True,
+    )
 
     def __repr__(self):
         return f"User id={self.id} Name={self.first_name} {self.last_name}"
@@ -81,7 +98,11 @@ class UserNetworkAccess(Base):
         primary_key=True,
     )
 
-    user = relationship("User", lazy="joined")
+    user = relationship(
+        "User",
+        back_populates="network_accesses",
+        lazy="joined",
+    )
     network = relationship("Network", lazy="joined")
     __table_args__ = (Index("idx_user_network_access_user", "user_id"),)
 
@@ -105,7 +126,11 @@ class UserChurchAccess(Base):
         primary_key=True,
     )
 
-    user = relationship("User", lazy="joined")
+    user = relationship(
+        "User",
+        back_populates="church_accesses",
+        lazy="joined",
+    )
     church = relationship("Church", lazy="joined")
     __table_args__ = (Index("idx_user_church_access_user", "user_id"),)
 
@@ -127,7 +152,11 @@ class UserChurchActivityAccess(Base):
         primary_key=True,
     )
 
-    user = relationship("User", lazy="joined")
+    user = relationship(
+        "User",
+        back_populates="activity_accesses",
+        lazy="joined",
+    )
     church_activity = relationship("ChurchActivity", lazy="joined")
     __table_args__ = (Index("idx_user_activity_access_user", "user_id"),)
 
