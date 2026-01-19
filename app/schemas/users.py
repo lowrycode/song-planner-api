@@ -52,11 +52,11 @@ class NetworkAccess(BaseModel):
     network_slug: str
 
 
-# class ChurchAccess(BaseModel):
-#     id: int
-#     church_id: int
-#     church_name: str
-#     church_slug: str
+class ChurchAccess(BaseModel):
+    id: int
+    church_id: int
+    church_name: str
+    church_slug: str
 
 
 class ChurchActivityAccess(BaseModel):

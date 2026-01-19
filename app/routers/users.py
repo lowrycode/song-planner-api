@@ -19,6 +19,7 @@ from app.schemas.users import (
     UserUpdateRequest,
     AdminUserUpdateRequest,
     NetworkAccess,
+    ChurchAccess,
     ChurchActivityAccess,
 )
 from app.dependencies import require_min_role
@@ -47,7 +48,8 @@ def get_network_access_for_user(
     Raises:
         HTTPException:
             - 404 if the user does not exist.
-            - 403 if the current user is not allowed to view the requested user's access.
+            - 403 if the current user is not allowed to view the requested
+            user's access.
 
     Returns:
         List of networks the user has access to.
@@ -157,6 +159,68 @@ def remove_network_access(
 
     db.delete(access)
     db.commit()
+
+
+@router.get(
+    "/{user_id}/access/churches",
+    response_model=list[ChurchAccess],
+    status_code=status.HTTP_200_OK,
+)
+def get_church_access_for_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.normal)),
+):
+    """
+    Get a list of churches that the specified user has access to.
+
+    Args:
+        user_id (int): The ID of the user whose church access is requested.
+        db (Session): The database session.
+        current_user (User): The authenticated user making the request.
+
+    Raises:
+        HTTPException:
+            - 404 if the user does not exist.
+            - 403 if the current user is not allowed to view the requested
+            user's access.
+
+    Returns:
+        List of churches the user has access to.
+    """
+    # Check user exists
+    user = (
+        db.query(User)
+        .options(
+            joinedload(User.church_accesses).joinedload(
+                UserChurchAccess.church
+            )
+        )
+        .filter(User.id == user_id)
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Allow if current_user is the same user or admin in same network
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if (
+        current_user.role == UserRole.admin
+        and current_user.network_id != user.network_id
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Return list of churches user has access to
+    return [
+        ChurchAccess(
+            id=access.church.id,
+            church_id=access.church.id,
+            church_name=access.church.name,
+            church_slug=access.church.slug,
+        )
+        for access in user.church_accesses
+    ]
 
 
 @router.post(
