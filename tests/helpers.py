@@ -134,8 +134,10 @@ class BaseTestHelpers:
         db_session.refresh(stats)
         return stats
 
-    def _create_network(self, db_session, network_name="Test Network"):
-        network = Network(name=network_name)
+    def _create_network(
+        self, db_session, network_name="Test Network", network_slug="test_slug"
+    ):
+        network = Network(name=network_name, slug=network_slug)
         db_session.add(network)
         db_session.commit()
         db_session.refresh(network)
@@ -199,7 +201,9 @@ class AdminAuthTestsMixin:
         return getattr(client, method)(url)
 
     def test_admin_user_allowed(self, client, db_session):
-        self._create_admin_user(db_session, username=self.username, password=self.password)
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
         self._login(client, self.username, self.password)
 
         response = self._request(client, self.url)
