@@ -332,3 +332,53 @@ def update_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.delete(
+    "/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.normal)),
+):
+    """
+    Delete a user account.
+
+    This endpoint allows a user to delete their own account, or an admin
+    to delete a user within the same network.
+
+    Regular users may only delete themselves.
+    Admin users may delete users belonging to their own network.
+
+    Args:
+        user_id (int): The ID of the user to delete.
+        db (Session): The database session.
+        current_user (User): The authenticated user performing the deletion.
+
+    Raises:
+        HTTPException:
+            - 404 if the user does not exist.
+            - 403 if the current user is not authorized to delete the user.
+
+    Returns:
+        None
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Regular users can only delete themselves
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Admins may only delete users in their own network
+    if (
+        current_user.role == UserRole.admin
+        and current_user.network_id != user.network_id
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    db.delete(user)
+    db.commit()

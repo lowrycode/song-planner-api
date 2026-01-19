@@ -1,5 +1,5 @@
 from tests.helpers import BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
-from app.models import UserNetworkAccess, UserChurchAccess, UserChurchActivityAccess
+from app.models import UserNetworkAccess, UserChurchAccess, UserChurchActivityAccess, User
 
 
 class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
@@ -641,3 +641,130 @@ class TestGetUser(BaseTestHelpers, AuthTestsMixin):
         response = client.get(self._get_url(admin.id))
         assert response.status_code == 200
         assert response.json()["id"] == admin.id
+
+
+class TestDeleteUser(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/users/{user_id}"
+    http_method = "delete"  # override variable in AuthTestsMixin
+
+    def _get_url(self, user_id: int) -> str:
+        return self.url_template.format(user_id=user_id)
+
+    @property  # used for authentication mixins only
+    def url(self):
+        return self._get_url(user_id=1)
+
+    def test_user_can_delete_self(self, client, db_session):
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
+
+        response = client.delete(self._get_url(user.id))
+        assert response.status_code == 204
+
+        # User should be deleted from DB
+        deleted = db_session.query(User).filter(User.id == user.id).first()
+        assert deleted is None
+
+    def test_user_cannot_delete_other_user(self, client, db_session):
+        user1 = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        user2 = self._create_user(
+            db_session,
+            username="other_user",
+            password="other_password",
+            network=user1.network,
+            church=user1.church,
+        )
+
+        self._login(client, self.username, self.password)
+
+        response = client.delete(self._get_url(user2.id))
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Forbidden"
+
+    def test_admin_can_delete_user_in_same_network(self, client, db_session):
+        admin_username = "admin_user"
+        admin_password = "admin_password"
+
+        admin = self._create_admin_user(
+            db_session,
+            username=admin_username,
+            password=admin_password,
+        )
+        self._login(client, admin_username, admin_password)
+
+        user = self._create_user(
+            db_session,
+            username="regular_user",
+            password="regular_password",
+            network=admin.network,
+            church=admin.church,
+        )
+
+        response = client.delete(self._get_url(user.id))
+        assert response.status_code == 204
+
+        deleted = db_session.query(User).filter(User.id == user.id).first()
+        assert deleted is None
+
+    def test_admin_cannot_delete_user_in_other_network(self, client, db_session):
+        network1 = self._create_network(db_session, "Network 1")
+        network2 = self._create_network(db_session, "Network 2")
+
+        church1 = self._create_church(db_session, network1, "Church 1", "church_1")
+        church2 = self._create_church(db_session, network2, "Church 2", "church_2")
+
+        admin = self._create_admin_user(
+            db_session,
+            username="admin_user",
+            password="admin_password",
+            network=network1,
+            church=church1,
+        )
+        self._login(client, "admin_user", "admin_password")
+
+        user = self._create_user(
+            db_session,
+            username="other_user",
+            password="regular_password",
+            network=network2,
+            church=church2,
+        )
+        assert admin.network_id != user.network_id
+
+        response = client.delete(self._get_url(user.id))
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Forbidden"
+
+    def test_delete_user_not_found(self, client, db_session):
+        self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
+
+        response = client.delete(self._get_url(user_id=9999))
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
+
+    def test_admin_can_delete_self(self, client, db_session):
+        admin = self._create_admin_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._login(client, self.username, self.password)
+
+        response = client.delete(self._get_url(admin.id))
+        assert response.status_code == 204
+
+        deleted = db_session.query(User).filter(User.id == admin.id).first()
+        assert deleted is None
