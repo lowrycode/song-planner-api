@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
@@ -15,7 +15,9 @@ from app.schemas.users import (
     GrantNetworkAccessResponse,
     GrantChurchAccessResponse,
     GrantChurchActivityAccessResponse,
-    UserBaseResponse,
+    UserAccountResponse,
+    UserUpdateRequest,
+    AdminUserUpdateRequest,
 )
 from app.dependencies import require_min_role
 
@@ -234,7 +236,7 @@ def remove_church_activity_access(
     db.commit()
 
 
-@router.get("/{user_id}", response_model=UserBaseResponse)
+@router.get("/{user_id}", response_model=UserAccountResponse)
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -253,4 +255,80 @@ def get_user(
     ):
         raise HTTPException(403, "Forbidden")
 
+    return user
+
+
+@router.put("/{user_id}", response_model=UserAccountResponse)
+def update_user(
+    user_id: int,
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.normal)),
+):
+    """
+    Update user account details.
+
+    This endpoint allows a user to update their own account details, or an admin
+    to update details for a user within the same network.
+
+    Regular users can update username, first name and last name.
+    Only admins can update the user's role, network and church.
+
+    Args:
+        user_id (int): The ID of the user whose details are being updated.
+        body (dict): The request body containing the updated user information.
+        db (Session): The database session for querying and committing changes.
+        current_user (User): The currently authenticated user performing the update.
+
+    Raises:
+        HTTPException:
+            - 404 if the user to update does not exist.
+            - 403 if the current user does not have permission to update the user.
+            - 400 if the provided username is already taken by another user.
+
+    Returns:
+        UserAccountResponse: The updated user details.
+
+    """
+    # Apply correct schema
+    if current_user.role == UserRole.admin:
+        data = AdminUserUpdateRequest(**body)
+    else:
+        data = UserUpdateRequest(**body)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(403, "Forbidden")
+
+    if (
+        current_user.role == UserRole.admin
+        and current_user.network_id != user.network_id
+    ):
+        raise HTTPException(403, "Forbidden")
+
+    # Check username is not already taken by ANOTHER user
+    existing_user = (
+        db.query(User)
+        .filter(User.username == data.username, User.id != user_id)
+        .first()
+    )
+    if existing_user:
+        raise HTTPException(400, "Username already taken")
+
+    # Update fields
+    user.username = data.username
+    user.first_name = data.first_name
+    user.last_name = data.last_name
+
+    # Only allow admin to update role, network or church
+    if current_user.role == UserRole.admin:
+        user.role = data.role
+        user.network_id = data.network_id
+        user.church_id = data.church_id
+
+    db.commit()
+    db.refresh(user)
     return user

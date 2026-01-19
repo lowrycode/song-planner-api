@@ -1,14 +1,9 @@
 from pydantic import BaseModel, field_validator
 
 
-class UserRegisterRequest(BaseModel):
-    first_name: str
-    last_name: str
+# Request models
+class UsernameBase(BaseModel):
     username: str
-    password: str
-    confirm_password: str
-    network_id: int
-    church_id: int
 
     @field_validator('username')
     def username_length(cls, v: str) -> str:
@@ -16,11 +11,23 @@ class UserRegisterRequest(BaseModel):
             raise ValueError("Username must be between 5 and 20 characters")
         return v
 
+
+class PasswordBase(BaseModel):
+    password: str
+
     @field_validator('password')
     def password_length(cls, v: str) -> str:
         if not 5 <= len(v) <= 20:
             raise ValueError("Password must be between 5 and 20 characters")
         return v
+
+
+class UserRegisterRequest(UsernameBase, PasswordBase):
+    first_name: str
+    last_name: str
+    confirm_password: str
+    network_id: int
+    church_id: int
 
 
 class UserRegisterResponse(BaseModel):

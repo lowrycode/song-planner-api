@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from app.models import UserRole
+from app.schemas.auth import UsernameBase
 
 
 # Shared Schemas
@@ -9,18 +10,24 @@ class GrantAccessBaseResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserBaseResponse(BaseModel):
+class UserAccountBase(UsernameBase):
     id: int
-    username: str
     first_name: str
     last_name: str
-    role: UserRole
+    # Username inherited from class
     network_id: int
     church_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
+
 # Request Schemas
+class UserUpdateRequest(UserAccountBase):
+    pass
+
+
+class AdminUserUpdateRequest(UserUpdateRequest):
+    role: UserRole
 
 
 # Response Schemas
@@ -37,3 +44,7 @@ class GrantChurchAccessResponse(GrantAccessBaseResponse):
 class GrantChurchActivityAccessResponse(GrantAccessBaseResponse):
     activity_id: int
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserAccountResponse(UserAccountBase):
+    role: UserRole
