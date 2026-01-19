@@ -1,4 +1,5 @@
 from pydantic import BaseModel, ConfigDict
+from app.models import UserRole
 
 
 # Shared Schemas
@@ -7,6 +8,17 @@ class GrantAccessBaseResponse(BaseModel):
     user_id: int
     model_config = ConfigDict(from_attributes=True)
 
+
+class UserBaseResponse(BaseModel):
+    id: int
+    username: str
+    first_name: str
+    last_name: str
+    role: UserRole
+    network_id: int
+    church_id: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 # Request Schemas
 

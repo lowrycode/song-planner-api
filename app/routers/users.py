@@ -15,6 +15,7 @@ from app.schemas.users import (
     GrantNetworkAccessResponse,
     GrantChurchAccessResponse,
     GrantChurchActivityAccessResponse,
+    UserBaseResponse,
 )
 from app.dependencies import require_min_role
 
@@ -231,3 +232,25 @@ def remove_church_activity_access(
 
     db.delete(access)
     db.commit()
+
+
+@router.get("/{user_id}", response_model=UserBaseResponse)
+def get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.normal)),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(403, "Forbidden")
+
+    if (
+        current_user.role == UserRole.admin
+        and current_user.network_id != user.network_id
+    ):
+        raise HTTPException(403, "Forbidden")
+
+    return user
