@@ -77,3 +77,8 @@ class UserAccountResponse(UserAccountBase):
     role: UserRole
     network_id: int
     church_id: int
+
+
+class UserWithAccessesResponse(UserAccountBase):
+    id: int
+    accesses: AllAccessResponse
