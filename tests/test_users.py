@@ -1318,3 +1318,274 @@ class TestGetChurchAccessForUser(BaseTestHelpers, AuthTestsMixin):
         response = client.get(self._get_url(999999))
         assert response.status_code == 404
         assert response.json()["detail"] == "User not found"
+
+
+class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/users/{user_id}/access/all"
+    http_method = "get"
+
+    def _get_url(self, user_id: int) -> str:
+        return self.url_template.format(user_id=user_id)
+
+    @property
+    def url(self):
+        return self._get_url(user_id=1)
+
+    def test_get_all_access_success_for_self(self, client, db_session):
+        user = self._create_user(
+            db_session, username="regular_user", password="password"
+        )
+
+        network = self._create_network(
+            db_session, name="Network 1", slug="network-1"
+        )
+        church = self._create_church(
+            db_session, network=network, name="Church 1", slug="church-1"
+        )
+        activity = self._create_church_activity(
+            db_session,
+            church=church,
+            name="Activity 1",
+            slug="activity-1",
+        )
+
+        db_session.add_all(
+            [
+                UserNetworkAccess(user_id=user.id, network_id=network.id),
+                UserChurchAccess(user_id=user.id, church_id=church.id),
+                UserChurchActivityAccess(
+                    user_id=user.id, church_activity_id=activity.id
+                ),
+            ]
+        )
+        db_session.commit()
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert "networks" in data
+        assert "churches" in data
+        assert "church_activities" in data
+
+        assert len(data["networks"]) == 1
+        assert data["networks"][0]["network_id"] == network.id
+
+        assert len(data["churches"]) == 1
+        assert data["churches"][0]["church_id"] == church.id
+
+        assert len(data["church_activities"]) == 1
+        assert data["church_activities"][0]["church_activity_id"] == activity.id
+
+    def test_get_all_access_success_for_admin_same_network(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        admin = self._create_user(
+            db_session,
+            username="admin",
+            password="password",
+            role=UserRole.admin,
+            network=network,
+            church=church,
+        )
+        user = self._create_user(
+            db_session,
+            username="user",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        db_session.add_all(
+            [
+                UserNetworkAccess(user_id=user.id, network_id=network.id),
+                UserChurchAccess(user_id=user.id, church_id=church.id),
+                UserChurchActivityAccess(
+                    user_id=user.id, church_activity_id=activity.id
+                ),
+            ]
+        )
+        db_session.commit()
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+
+        data = response.json()
+        assert len(data["networks"]) == 1
+        assert len(data["churches"]) == 1
+        assert len(data["church_activities"]) == 1
+
+    def test_forbidden_if_admin_different_network(self, client, db_session):
+        network1 = self._create_network(
+            db_session, name="Network 1", slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, name="Network 2", slug="network-2"
+        )
+
+        church1 = self._create_church(
+            db_session, network=network1, name="Church 1", slug="church-1"
+        )
+        church2 = self._create_church(
+            db_session, network=network2, name="Church 2", slug="church-2"
+        )
+
+        admin = self._create_user(
+            db_session,
+            username="admin",
+            password="password",
+            role=UserRole.admin,
+            network=network1,
+            church=church1,
+        )
+        user = self._create_user(
+            db_session,
+            username="user",
+            password="password",
+            network=network2,
+            church=church2,
+        )
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 403
+
+    def test_forbidden_if_not_self_or_admin(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        user1 = self._create_user(
+            db_session,
+            username="user1",
+            password="password",
+            network=network,
+            church=church,
+        )
+        user2 = self._create_user(
+            db_session,
+            username="user2",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        self._login(client, user1.username, "password")
+
+        response = client.get(self._get_url(user2.id))
+        assert response.status_code == 403
+
+    def test_user_not_found(self, client, db_session):
+        user = self._create_user(db_session, username="user", password="password")
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(999999))
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
+
+    def test_get_all_access_network_only(self, client, db_session):
+        user = self._create_user(
+            db_session, username="user", password="password"
+        )
+        network = self._create_network(
+            db_session, name="Network 1", slug="network-1"
+        )
+
+        db_session.add(
+            UserNetworkAccess(user_id=user.id, network_id=network.id)
+        )
+        db_session.commit()
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert len(data["networks"]) == 1
+        assert data["networks"][0]["network_id"] == network.id
+
+        assert data["churches"] == []
+        assert data["church_activities"] == []
+
+    def test_get_all_access_network_and_church_only(self, client, db_session):
+        user = self._create_user(
+            db_session, username="user", password="password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        db_session.add_all(
+            [
+                UserNetworkAccess(user_id=user.id, network_id=network.id),
+                UserChurchAccess(user_id=user.id, church_id=church.id),
+            ]
+        )
+        db_session.commit()
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert len(data["networks"]) == 1
+        assert data["networks"][0]["network_id"] == network.id
+
+        assert len(data["churches"]) == 1
+        assert data["churches"][0]["church_id"] == church.id
+
+        assert data["church_activities"] == []
+
+    def test_get_all_access_activity_only(self, client, db_session):
+        user = self._create_user(
+            db_session, username="user", password="password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        db_session.add(
+            UserChurchActivityAccess(
+                user_id=user.id, church_activity_id=activity.id
+            )
+        )
+        db_session.commit()
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["networks"] == []
+        assert data["churches"] == []
+
+        assert len(data["church_activities"]) == 1
+        assert data["church_activities"][0]["church_activity_id"] == activity.id
+
+    def test_get_all_access_empty(self, client, db_session):
+        user = self._create_user(
+            db_session, username="user", password="password"
+        )
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert data["networks"] == []
+        assert data["churches"] == []
+        assert data["church_activities"] == []

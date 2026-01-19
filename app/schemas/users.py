@@ -66,6 +66,12 @@ class ChurchActivityAccess(BaseModel):
     church_activity_slug: str
 
 
+class AllAccessResponse(BaseModel):
+    networks: list[NetworkAccess]
+    churches: list[ChurchAccess]
+    church_activities: list[ChurchActivityAccess]
+
+
 class UserAccountResponse(UserAccountBase):
     id: int
     role: UserRole

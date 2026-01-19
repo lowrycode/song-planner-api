@@ -21,6 +21,7 @@ from app.schemas.users import (
     NetworkAccess,
     ChurchAccess,
     ChurchActivityAccess,
+    AllAccessResponse,
 )
 from app.dependencies import require_min_role
 
@@ -58,9 +59,7 @@ def get_network_access_for_user(
     user = (
         db.query(User)
         .options(
-            joinedload(User.network_accesses).joinedload(
-                UserNetworkAccess.network
-            )
+            joinedload(User.network_accesses).joinedload(UserNetworkAccess.network)
         )
         .filter(User.id == user_id)
         .first()
@@ -191,11 +190,7 @@ def get_church_access_for_user(
     # Check user exists
     user = (
         db.query(User)
-        .options(
-            joinedload(User.church_accesses).joinedload(
-                UserChurchAccess.church
-            )
-        )
+        .options(joinedload(User.church_accesses).joinedload(UserChurchAccess.church))
         .filter(User.id == user_id)
         .first()
     )
@@ -423,6 +418,87 @@ def remove_church_activity_access(
 
     db.delete(access)
     db.commit()
+
+
+@router.get(
+    "/{user_id}/access/all",
+    response_model=AllAccessResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_all_access_for_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.normal)),
+):
+    """
+    Get all access (networks, churches, church activities) for the specified user.
+
+    Args:
+        user_id (int): The ID of the user.
+        db (Session): Database session.
+        current_user (User): The authenticated user making the request.
+
+    Raises:
+        HTTPException:
+            - 404 if the user does not exist.
+            - 403 if the current user is not allowed to view the requested
+            user's access.
+
+    Returns:
+        A dict containing lists of network, church, and church activity accesses.
+    """
+    user = (
+        db.query(User)
+        .options(
+            joinedload(User.network_accesses).joinedload(UserNetworkAccess.network),
+            joinedload(User.church_accesses).joinedload(UserChurchAccess.church),
+            joinedload(User.activity_accesses).joinedload(
+                UserChurchActivityAccess.church_activity
+            ),
+        )
+        .filter(User.id == user_id)
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if (
+        current_user.role == UserRole.admin
+        and current_user.network_id != user.network_id
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return AllAccessResponse(
+        networks=[
+            NetworkAccess(
+                id=access.network.id,
+                network_id=access.network.id,
+                network_name=access.network.name,
+                network_slug=access.network.slug,
+            )
+            for access in user.network_accesses
+        ],
+        churches=[
+            ChurchAccess(
+                id=access.church.id,
+                church_id=access.church.id,
+                church_name=access.church.name,
+                church_slug=access.church.slug,
+            )
+            for access in user.church_accesses
+        ],
+        church_activities=[
+            ChurchActivityAccess(
+                id=access.church_activity.id,
+                church_activity_id=access.church_activity.id,
+                church_activity_name=access.church_activity.name,
+                church_activity_slug=access.church_activity.slug,
+            )
+            for access in user.activity_accesses
+        ],
+    )
 
 
 @router.get("/{user_id}", response_model=UserAccountResponse)
