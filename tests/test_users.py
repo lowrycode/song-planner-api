@@ -1,5 +1,11 @@
 from tests.helpers import BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
-from app.models import UserNetworkAccess, UserChurchAccess, UserChurchActivityAccess, User
+from app.models import (
+    UserNetworkAccess,
+    UserChurchAccess,
+    UserChurchActivityAccess,
+    User,
+    UserRole,
+)
 
 
 class TestGrantNetworkAccess(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
@@ -641,6 +647,175 @@ class TestGetUser(BaseTestHelpers, AuthTestsMixin):
         response = client.get(self._get_url(admin.id))
         assert response.status_code == 200
         assert response.json()["id"] == admin.id
+
+
+class TestUpdateUser(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/users/{user_id}"
+    http_method = "put"
+
+    def _get_url(self, user_id: int) -> str:
+        return self.url_template.format(user_id=user_id)
+
+    @property
+    def url(self):
+        return self._get_url(user_id=1)
+
+    def _user_update_payload(self, *, username=None, first_name=None, last_name=None):
+        # Regular user update payload (no role, network, church)
+        return {
+            "username": username or "updateduser",
+            "first_name": first_name or "Updated",
+            "last_name": last_name or "User",
+        }
+
+    def _admin_update_payload(
+        self,
+        *,
+        username=None,
+        first_name=None,
+        last_name=None,
+        role=None,
+        network_id=None,
+        church_id=None,
+    ):
+        # Admin update payload includes role, network_id, church_id
+        return {
+            "username": username or "adminupdateduser",
+            "first_name": first_name or "AdminUpdated",
+            "last_name": last_name or "User",
+            "role": role or UserRole.normal,
+            "network_id": network_id,
+            "church_id": church_id,
+        }
+
+    def test_user_can_update_own_account(self, client, db_session):
+        user = self._create_user(db_session, username="user1", password=self.password)
+        self._login(client, user.username, self.password)
+
+        payload = self._user_update_payload(
+            username="newusername", first_name="NewFirst"
+        )
+
+        response = client.put(self._get_url(user.id), json=payload)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == user.id
+        assert data["username"] == "newusername"
+        assert data["first_name"] == "NewFirst"
+        assert data["last_name"] == "User"
+        # Role, network_id, church_id remain unchanged for regular user
+        assert data["role"] == user.role
+        assert data["network_id"] == user.network_id
+        assert data["church_id"] == user.church_id
+
+    def test_user_cannot_update_other_user(self, client, db_session):
+        user1 = self._create_user(db_session, username="user1", password=self.password)
+        user2 = self._create_user(
+            db_session,
+            username="user2",
+            password=self.password,
+            network=user1.network,
+            church=user1.church,
+        )
+        self._login(client, user1.username, self.password)
+
+        payload = self._user_update_payload(username="newusername")
+
+        response = client.put(self._get_url(user2.id), json=payload)
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Forbidden"
+
+    def test_admin_can_update_user_in_same_network(self, client, db_session):
+        admin = self._create_admin_user(
+            db_session,
+            username="admin",
+            password=self.password,
+        )
+        self._login(client, admin.username, self.password)
+
+        user = self._create_user(
+            db_session,
+            username="user",
+            password=self.password,
+            network=admin.network,
+            church=admin.church,
+        )
+
+        payload = self._admin_update_payload(
+            username="updateduser",
+            role=UserRole.editor,
+            network_id=admin.network.id,
+            church_id=admin.church.id,
+        )
+
+        response = client.put(self._get_url(user.id), json=payload)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == user.id
+        assert data["username"] == "updateduser"
+        assert data["role"] == UserRole.editor
+        assert data["network_id"] == admin.network.id
+        assert data["church_id"] == admin.church.id
+
+    def test_admin_cannot_update_user_in_other_network(self, client, db_session):
+        network1 = self._create_network(db_session, "Network 1")
+        network2 = self._create_network(db_session, "Network 2")
+
+        church1 = self._create_church(db_session, network1, "Church 1", "church1")
+        church2 = self._create_church(db_session, network2, "Church 2", "church2")
+
+        admin = self._create_admin_user(
+            db_session,
+            username="admin",
+            password=self.password,
+            network=network1,
+            church=church1,
+        )
+        self._login(client, admin.username, self.password)
+
+        user = self._create_user(
+            db_session,
+            username="user",
+            password=self.password,
+            network=network2,
+            church=church2,
+        )
+
+        payload = self._admin_update_payload(
+            username="updateduser",
+            role=UserRole.editor,
+            network_id=network2.id,
+            church_id=church2.id,
+        )
+
+        response = client.put(self._get_url(user.id), json=payload)
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Forbidden"
+
+    def test_update_user_not_found(self, client, db_session):
+        user = self._create_user(db_session, username="user", password=self.password)
+        self._login(client, user.username, self.password)
+
+        payload = self._user_update_payload(username="newusername")
+
+        response = client.put(self._get_url(user_id=99999), json=payload)
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
+
+    def test_username_already_taken(self, client, db_session):
+        user1 = self._create_user(db_session, username="user1", password=self.password)
+        user2 = self._create_user(db_session, username="user2", password=self.password)
+
+        self._login(client, user1.username, self.password)
+
+        payload = self._user_update_payload(username="user2")
+
+        response = client.put(self._get_url(user1.id), json=payload)
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Username already taken"
+        assert user1.username != user2.username
 
 
 class TestDeleteUser(BaseTestHelpers, AuthTestsMixin):

@@ -11,12 +11,9 @@ class GrantAccessBaseResponse(BaseModel):
 
 
 class UserAccountBase(UsernameBase):
-    id: int
     first_name: str
     last_name: str
     # Username inherited from class
-    network_id: int
-    church_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -28,6 +25,8 @@ class UserUpdateRequest(UserAccountBase):
 
 class AdminUserUpdateRequest(UserUpdateRequest):
     role: UserRole
+    network_id: int
+    church_id: int
 
 
 # Response Schemas
@@ -47,4 +46,7 @@ class GrantChurchActivityAccessResponse(GrantAccessBaseResponse):
 
 
 class UserAccountResponse(UserAccountBase):
+    id: int
     role: UserRole
+    network_id: int
+    church_id: int
