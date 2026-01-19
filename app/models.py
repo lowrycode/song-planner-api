@@ -103,7 +103,7 @@ class UserNetworkAccess(Base):
         back_populates="network_accesses",
         lazy="joined",
     )
-    network = relationship("Network", lazy="joined")
+    network = relationship("Network", back_populates="user_accesses", lazy="joined")
     __table_args__ = (Index("idx_user_network_access_user", "user_id"),)
 
     def __repr__(self):
@@ -131,7 +131,7 @@ class UserChurchAccess(Base):
         back_populates="church_accesses",
         lazy="joined",
     )
-    church = relationship("Church", lazy="joined")
+    church = relationship("Church", back_populates="user_accesses", lazy="joined")
     __table_args__ = (Index("idx_user_church_access_user", "user_id"),)
 
     def __repr__(self):
@@ -157,7 +157,9 @@ class UserChurchActivityAccess(Base):
         back_populates="activity_accesses",
         lazy="joined",
     )
-    church_activity = relationship("ChurchActivity", lazy="joined")
+    church_activity = relationship(
+        "ChurchActivity", back_populates="user_accesses", lazy="joined"
+    )
     __table_args__ = (Index("idx_user_activity_access_user", "user_id"),)
 
     def __repr__(self):
@@ -341,6 +343,9 @@ class Network(Base):
     churches = relationship(
         "Church", back_populates="network", cascade="all, delete-orphan"
     )
+    user_accesses = relationship(
+        "UserNetworkAccess", back_populates="network"
+    )
 
     def __repr__(self):
         return f"<Network id={self.id} name={self.name}>"
@@ -367,6 +372,9 @@ class Church(Base):
     activities = relationship(
         "ChurchActivity", back_populates="church", cascade="all, delete-orphan"
     )
+    user_accesses = relationship(
+        "UserChurchAccess", back_populates="church", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Church id={self.id} network_id={self.network_id} name={self.name}>"
@@ -392,6 +400,9 @@ class ChurchActivity(Base):
     church = relationship("Church", back_populates="activities")
     song_usages = relationship("SongUsage", back_populates="church_activity")
     usage_stats = relationship("SongUsageStats", back_populates="church_activity")
+    user_accesses = relationship(
+        "UserChurchActivityAccess", back_populates="church_activity"
+    )
 
     def __repr__(self):
         return f"<ChurchActivity id={self.id} name={self.name}>"
