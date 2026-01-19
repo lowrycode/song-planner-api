@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
     User,
@@ -18,6 +18,7 @@ from app.schemas.users import (
     UserAccountResponse,
     UserUpdateRequest,
     AdminUserUpdateRequest,
+    ChurchActivityAccess,
 )
 from app.dependencies import require_min_role
 
@@ -162,6 +163,68 @@ def remove_church_access(
 
     db.delete(access)
     db.commit()
+
+
+@router.get(
+    "/{user_id}/access/activities",
+    response_model=list[ChurchActivityAccess],
+    status_code=status.HTTP_200_OK,
+)
+def get_church_activity_access_for_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.normal)),
+):
+    """
+    Get a list of church activities that the specified user has access to.
+
+    Args:
+        user_id (int): The ID of the user whose church activity access is requested.
+        db (Session): The database session.
+        current_user (User): The authenticated user making the request.
+
+    Raises:
+        HTTPException:
+            - 404 if the user does not exist.
+            - 403 if the current user is not allowed to view the requested
+            user's access.
+
+    Returns:
+        List of church activities the user has access to.
+    """
+    # Check user exists
+    user = (
+        db.query(User)
+        .options(
+            joinedload(User.activity_accesses).joinedload(
+                UserChurchActivityAccess.church_activity
+            )
+        )
+        .filter(User.id == user_id)
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Allow if current_user is the same user or admin in same network
+    if current_user.id != user_id and current_user.role != UserRole.admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if (
+        current_user.role == UserRole.admin
+        and current_user.network_id != user.network_id
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Query activities that user has access to
+    return [
+        ChurchActivityAccess(
+            id=access.church_activity.id,
+            church_activity_id=access.church_activity.id,
+            church_activity_name=access.church_activity.name,
+            church_activity_slug=access.church_activity.slug,
+        )
+        for access in user.activity_accesses
+    ]
 
 
 @router.post(

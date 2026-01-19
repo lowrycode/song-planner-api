@@ -45,6 +45,27 @@ class GrantChurchActivityAccessResponse(GrantAccessBaseResponse):
     model_config = ConfigDict(from_attributes=True)
 
 
+# class NetworkAccess(BaseModel):
+#     id: int
+#     network_id: int
+#     network_name: str
+#     network_slug: str
+
+
+# class ChurchAccess(BaseModel):
+#     id: int
+#     church_id: int
+#     church_name: str
+#     church_slug: str
+
+
+class ChurchActivityAccess(BaseModel):
+    id: int
+    church_activity_id: int
+    church_activity_name: str
+    church_activity_slug: str
+
+
 class UserAccountResponse(UserAccountBase):
     id: int
     role: UserRole

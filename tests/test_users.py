@@ -943,3 +943,137 @@ class TestDeleteUser(BaseTestHelpers, AuthTestsMixin):
 
         deleted = db_session.query(User).filter(User.id == admin.id).first()
         assert deleted is None
+
+
+class TestGetChurchActivityAccessForUser(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/users/{user_id}/access/activities"
+    http_method = "get"  # GET method
+
+    def _get_url(self, user_id: int) -> str:
+        return self.url_template.format(user_id=user_id)
+
+    @property
+    def url(self):
+        return self._get_url(user_id=1)
+
+    def test_get_access_success_for_self(self, client, db_session):
+        user = self._create_user(
+            db_session, username="regular_user", password="password"
+        )
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity1 = self._create_church_activity(
+            db_session,
+            church=church,
+            church_activity_name="Activity 1",
+            church_activity_slug="activity-1",
+        )
+        activity2 = self._create_church_activity(
+            db_session,
+            church=church,
+            church_activity_name="Activity 2",
+            church_activity_slug="activity-2",
+        )
+
+        # Grant access to user for activity1
+        db_session.add(
+            UserChurchActivityAccess(user_id=user.id, church_activity_id=activity1.id)
+        )
+        db_session.commit()
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should include activity1 but not activity2
+        assert any(item["church_activity_id"] == activity1.id for item in data)
+        assert not any(item["church_activity_id"] == activity2.id for item in data)
+
+    def test_get_access_success_for_admin_same_network(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        admin = self._create_user(
+            db_session,
+            username="admin",
+            password="password",
+            role=UserRole.admin,
+            network=network,
+            church=church,
+        )
+        user = self._create_user(
+            db_session,
+            username="user",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        db_session.add(
+            UserChurchActivityAccess(user_id=user.id, church_activity_id=activity.id)
+        )
+        db_session.commit()
+
+        self._login(client, admin.username, "password")
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["church_activity_id"] == activity.id
+
+    def test_forbidden_if_admin_different_network(self, client, db_session):
+        network1 = self._create_network(db_session)
+        network2 = self._create_network(db_session)
+        church1 = self._create_church(db_session, network1)
+        church2 = self._create_church(db_session, network2)
+        admin = self._create_user(
+            db_session,
+            username="admin",
+            password="password",
+            role=UserRole.admin,
+            network=network1,
+            church=church1,
+        )
+        user = self._create_user(
+            db_session,
+            username="user",
+            password="password",
+            network=network2,
+            church=church2,
+        )
+
+        self._login(client, admin.username, "password")
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 403
+
+    def test_forbidden_if_not_self_or_admin(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        user1 = self._create_user(
+            db_session,
+            username="user1",
+            password="password",
+            network=network,
+            church=church,
+        )
+        user2 = self._create_user(
+            db_session,
+            username="user2",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        self._login(client, user1.username, "password")
+        response = client.get(self._get_url(user2.id))
+        assert response.status_code == 403
+
+    def test_user_not_found(self, client, db_session):
+        user = self._create_user(db_session, username="user", password="password")
+        self._login(client, user.username, "password")
+        response = client.get(self._get_url(999999))
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
