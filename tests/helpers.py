@@ -135,18 +135,18 @@ class BaseTestHelpers:
         return stats
 
     def _create_network(
-        self, db_session, network_name="Test Network", network_slug="test_slug"
+        self, db_session, name="Test Network", slug="test_slug"
     ):
-        network = Network(name=network_name, slug=network_slug)
+        network = Network(name=name, slug=slug)
         db_session.add(network)
         db_session.commit()
         db_session.refresh(network)
         return network
 
     def _create_church(
-        self, db_session, network, church_name="Test Church", church_slug="test_slug"
+        self, db_session, network, name="Test Church", slug="test_slug"
     ):
-        church = Church(network_id=network.id, name=church_name, slug=church_slug)
+        church = Church(network_id=network.id, name=name, slug=slug)
         db_session.add(church)
         db_session.commit()
         db_session.refresh(church)
@@ -156,15 +156,15 @@ class BaseTestHelpers:
         self,
         db_session,
         church,
-        church_activity_name="Test Activity Name",
-        church_activity_slug="test_activity_name",
-        church_activity_type=0,
+        name="Test Activity Name",
+        slug="test_activity_name",
+        type=0,
     ):
         church_activity = ChurchActivity(
             church_id=church.id,
-            name=church_activity_name,
-            slug=church_activity_slug,
-            type=church_activity_type,
+            name=name,
+            slug=slug,
+            type=type,
         )
         db_session.add(church_activity)
         db_session.commit()

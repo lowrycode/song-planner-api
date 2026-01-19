@@ -181,13 +181,13 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
         network = self._create_network(db_session)
         church1 = self._create_church(
-            db_session, network, church_name="Church 1", church_slug="church_1"
+            db_session, network, name="Church 1", slug="church_1"
         )
         church_activity1 = self._create_church_activity(
             db_session, church1, "Church Activity 1", "church_activity_1", 0
         )
         church2 = self._create_church(
-            db_session, network, church_name="Church 2", church_slug="church_2"
+            db_session, network, name="Church 2", slug="church_2"
         )
         church_activity2 = self._create_church_activity(
             db_session, church2, "Church Activity 2", "church_activity_2", 0
@@ -291,20 +291,20 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         church_activity0 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Activity 0",
-            church_activity_slug="activity0",
+            name="Activity 0",
+            slug="activity0",
         )
         church_activity1 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Activity 1",
-            church_activity_slug="activity1",
+            name="Activity 1",
+            slug="activity1",
         )
         church_activity2 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Activity 2",
-            church_activity_slug="activity2",
+            name="Activity 2",
+            slug="activity2",
         )
 
         song = self._create_song(db_session)
@@ -1246,14 +1246,14 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         activity1 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Activity One",
-            church_activity_slug="activity_one",
+            name="Activity One",
+            slug="activity_one",
         )
         activity2 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Activity Two",
-            church_activity_slug="activity_two",
+            name="Activity Two",
+            slug="activity_two",
         )
 
         hymn_song = self._create_song(db_session, is_hymn=True)

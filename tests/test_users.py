@@ -566,10 +566,10 @@ class TestGetUser(BaseTestHelpers, AuthTestsMixin):
     def test_admin_cannot_get_user_in_other_network(self, client, db_session):
         # Create networks
         network1 = self._create_network(
-            db_session, "Network 1", network_slug="network-1"
+            db_session, "Network 1", slug="network-1"
         )
         network2 = self._create_network(
-            db_session, "Network 2", network_slug="network-2"
+            db_session, "Network 2", slug="network-2"
         )
 
         # Create churches
@@ -765,10 +765,10 @@ class TestUpdateUser(BaseTestHelpers, AuthTestsMixin):
 
     def test_admin_cannot_update_user_in_other_network(self, client, db_session):
         network1 = self._create_network(
-            db_session, "Network 1", network_slug="network-1"
+            db_session, "Network 1", slug="network-1"
         )
         network2 = self._create_network(
-            db_session, "Network 2", network_slug="network-2"
+            db_session, "Network 2", slug="network-2"
         )
 
         church1 = self._create_church(db_session, network1, "Church 1", "church1")
@@ -899,10 +899,10 @@ class TestDeleteUser(BaseTestHelpers, AuthTestsMixin):
 
     def test_admin_cannot_delete_user_in_other_network(self, client, db_session):
         network1 = self._create_network(
-            db_session, network_name="Network 1", network_slug="network-1"
+            db_session, name="Network 1", slug="network-1"
         )
         network2 = self._create_network(
-            db_session, network_name="Network 2", network_slug="network-2"
+            db_session, name="Network 2", slug="network-2"
         )
 
         church1 = self._create_church(db_session, network1, "Church 1", "church_1")
@@ -977,14 +977,14 @@ class TestGetChurchActivityAccessForUser(BaseTestHelpers, AuthTestsMixin):
         activity1 = self._create_church_activity(
             db_session,
             church=church,
-            church_activity_name="Activity 1",
-            church_activity_slug="activity-1",
+            name="Activity 1",
+            slug="activity-1",
         )
         activity2 = self._create_church_activity(
             db_session,
             church=church,
-            church_activity_name="Activity 2",
-            church_activity_slug="activity-2",
+            name="Activity 2",
+            slug="activity-2",
         )
 
         # Grant access to user for activity1
@@ -1038,10 +1038,10 @@ class TestGetChurchActivityAccessForUser(BaseTestHelpers, AuthTestsMixin):
 
     def test_forbidden_if_admin_different_network(self, client, db_session):
         network1 = self._create_network(
-            db_session, network_name="Network 1", network_slug="network-1"
+            db_session, name="Network 1", slug="network-1"
         )
         network2 = self._create_network(
-            db_session, network_name="Network 2", network_slug="network-2"
+            db_session, name="Network 2", slug="network-2"
         )
         church1 = self._create_church(db_session, network1)
         church2 = self._create_church(db_session, network2)
@@ -1111,10 +1111,10 @@ class TestGetNetworkAccessForUser(BaseTestHelpers, AuthTestsMixin):
             db_session, username="regular_user", password="password"
         )
         network1 = self._create_network(
-            db_session, network_name="Network 1", network_slug="network-1"
+            db_session, name="Network 1", slug="network-1"
         )
         network2 = self._create_network(
-            db_session, network_name="Network 2", network_slug="network-2"
+            db_session, name="Network 2", slug="network-2"
         )
 
         # Grant access to user for network1 only
@@ -1162,10 +1162,10 @@ class TestGetNetworkAccessForUser(BaseTestHelpers, AuthTestsMixin):
 
     def test_forbidden_if_admin_different_network(self, client, db_session):
         network1 = self._create_network(
-            db_session, network_name="Network 1", network_slug="network-1"
+            db_session, name="Network 1", slug="network-1"
         )
         network2 = self._create_network(
-            db_session, network_name="Network 2", network_slug="network-2"
+            db_session, name="Network 2", slug="network-2"
         )
         church1 = self._create_church(db_session, network=network1)
         church2 = self._create_church(db_session, network=network2)

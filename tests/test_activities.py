@@ -18,14 +18,14 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
         activity1 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Newland AM",
-            church_activity_slug="newland_am",
+            name="Newland AM",
+            slug="newland_am",
         )
         activity2 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Riverside AM",
-            church_activity_slug="riverside_am",
+            name="Riverside AM",
+            slug="riverside_am",
         )
 
         # Force IDs into the allowed range (1–10)
@@ -51,14 +51,14 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
         activity_b = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Riverside AM",
-            church_activity_slug="riverside_am",
+            name="Riverside AM",
+            slug="riverside_am",
         )
         activity_a = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Newland AM",
-            church_activity_slug="newland_am",
+            name="Newland AM",
+            slug="newland_am",
         )
 
         # Ensure IDs are within the viewable range
@@ -85,8 +85,8 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
         viewable = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Visible Activity",
-            church_activity_slug="visible",
+            name="Visible Activity",
+            slug="visible",
         )
         viewable.id = 1
 
@@ -94,8 +94,8 @@ class TestListViewableChurchActivities(BaseTestHelpers, AuthTestsMixin):
         hidden = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Hidden Activity",
-            church_activity_slug="hidden",
+            name="Hidden Activity",
+            slug="hidden",
         )
         hidden.id = 99
 
@@ -123,8 +123,8 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
         activity = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Sunday Service",
-            church_activity_slug="sunday_service",
+            name="Sunday Service",
+            slug="sunday_service",
         )
 
         song1 = self._create_song(db_session)
@@ -164,14 +164,14 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
         activity1 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Morning",
-            church_activity_slug="morning",
+            name="Morning",
+            slug="morning",
         )
         activity2 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Evening",
-            church_activity_slug="evening",
+            name="Evening",
+            slug="evening",
         )
 
         song = self._create_song(db_session)
@@ -205,14 +205,14 @@ class TestSongUsageByActivity(BaseTestHelpers, AuthTestsMixin):
         activity1 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Included",
-            church_activity_slug="included",
+            name="Included",
+            slug="included",
         )
         activity2 = self._create_church_activity(
             db_session,
             church,
-            church_activity_name="Excluded",
-            church_activity_slug="excluded",
+            name="Excluded",
+            slug="excluded",
         )
 
         song = self._create_song(db_session)
