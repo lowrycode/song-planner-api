@@ -565,8 +565,12 @@ class TestGetUser(BaseTestHelpers, AuthTestsMixin):
 
     def test_admin_cannot_get_user_in_other_network(self, client, db_session):
         # Create networks
-        network1 = self._create_network(db_session, "Network 1")
-        network2 = self._create_network(db_session, "Network 2")
+        network1 = self._create_network(
+            db_session, "Network 1", network_slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, "Network 2", network_slug="network-2"
+        )
 
         # Create churches
         church1 = self._create_church(db_session, network1, "Church 1", "church_1")
@@ -760,8 +764,12 @@ class TestUpdateUser(BaseTestHelpers, AuthTestsMixin):
         assert data["church_id"] == admin.church.id
 
     def test_admin_cannot_update_user_in_other_network(self, client, db_session):
-        network1 = self._create_network(db_session, "Network 1")
-        network2 = self._create_network(db_session, "Network 2")
+        network1 = self._create_network(
+            db_session, "Network 1", network_slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, "Network 2", network_slug="network-2"
+        )
 
         church1 = self._create_church(db_session, network1, "Church 1", "church1")
         church2 = self._create_church(db_session, network2, "Church 2", "church2")
@@ -890,8 +898,12 @@ class TestDeleteUser(BaseTestHelpers, AuthTestsMixin):
         assert deleted is None
 
     def test_admin_cannot_delete_user_in_other_network(self, client, db_session):
-        network1 = self._create_network(db_session, "Network 1")
-        network2 = self._create_network(db_session, "Network 2")
+        network1 = self._create_network(
+            db_session, network_name="Network 1", network_slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, network_name="Network 2", network_slug="network-2"
+        )
 
         church1 = self._create_church(db_session, network1, "Church 1", "church_1")
         church2 = self._create_church(db_session, network2, "Church 2", "church_2")
@@ -1025,10 +1037,138 @@ class TestGetChurchActivityAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["church_activity_id"] == activity.id
 
     def test_forbidden_if_admin_different_network(self, client, db_session):
-        network1 = self._create_network(db_session)
-        network2 = self._create_network(db_session)
+        network1 = self._create_network(
+            db_session, network_name="Network 1", network_slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, network_name="Network 2", network_slug="network-2"
+        )
         church1 = self._create_church(db_session, network1)
         church2 = self._create_church(db_session, network2)
+        admin = self._create_user(
+            db_session,
+            username="admin",
+            password="password",
+            role=UserRole.admin,
+            network=network1,
+            church=church1,
+        )
+        user = self._create_user(
+            db_session,
+            username="user",
+            password="password",
+            network=network2,
+            church=church2,
+        )
+
+        self._login(client, admin.username, "password")
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 403
+
+    def test_forbidden_if_not_self_or_admin(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        user1 = self._create_user(
+            db_session,
+            username="user1",
+            password="password",
+            network=network,
+            church=church,
+        )
+        user2 = self._create_user(
+            db_session,
+            username="user2",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        self._login(client, user1.username, "password")
+        response = client.get(self._get_url(user2.id))
+        assert response.status_code == 403
+
+    def test_user_not_found(self, client, db_session):
+        user = self._create_user(db_session, username="user", password="password")
+        self._login(client, user.username, "password")
+        response = client.get(self._get_url(999999))
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
+
+
+class TestGetNetworkAccessForUser(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/users/{user_id}/access/networks"
+    http_method = "get"
+
+    def _get_url(self, user_id: int) -> str:
+        return self.url_template.format(user_id=user_id)
+
+    @property
+    def url(self):
+        return self._get_url(user_id=1)
+
+    def test_get_access_success_for_self(self, client, db_session):
+        user = self._create_user(
+            db_session, username="regular_user", password="password"
+        )
+        network1 = self._create_network(
+            db_session, network_name="Network 1", network_slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, network_name="Network 2", network_slug="network-2"
+        )
+
+        # Grant access to user for network1 only
+        db_session.add(UserNetworkAccess(user_id=user.id, network_id=network1.id))
+        db_session.commit()
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should include network1 but not network2
+        assert any(item["network_id"] == network1.id for item in data)
+        assert not any(item["network_id"] == network2.id for item in data)
+
+    def test_get_access_success_for_admin_same_network(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        admin = self._create_user(
+            db_session,
+            username="admin",
+            password="password",
+            role=UserRole.admin,
+            network=network,
+            church=church,
+        )
+        user = self._create_user(
+            db_session,
+            username="user",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        db_session.add(UserNetworkAccess(user_id=user.id, network_id=network.id))
+        db_session.commit()
+
+        self._login(client, admin.username, "password")
+        response = client.get(self._get_url(user.id))
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["network_id"] == network.id
+
+    def test_forbidden_if_admin_different_network(self, client, db_session):
+        network1 = self._create_network(
+            db_session, network_name="Network 1", network_slug="network-1"
+        )
+        network2 = self._create_network(
+            db_session, network_name="Network 2", network_slug="network-2"
+        )
+        church1 = self._create_church(db_session, network=network1)
+        church2 = self._create_church(db_session, network=network2)
         admin = self._create_user(
             db_session,
             username="admin",

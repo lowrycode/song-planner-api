@@ -45,11 +45,11 @@ class GrantChurchActivityAccessResponse(GrantAccessBaseResponse):
     model_config = ConfigDict(from_attributes=True)
 
 
-# class NetworkAccess(BaseModel):
-#     id: int
-#     network_id: int
-#     network_name: str
-#     network_slug: str
+class NetworkAccess(BaseModel):
+    id: int
+    network_id: int
+    network_name: str
+    network_slug: str
 
 
 # class ChurchAccess(BaseModel):
