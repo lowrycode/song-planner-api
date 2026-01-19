@@ -51,8 +51,14 @@ class BaseTestHelpers:
         db_session.refresh(user)
         return user
 
-    def _create_admin_user(self, db_session, username, password):
-        return self._create_user(db_session, username, password, role=UserRole.admin)
+    def _create_admin_user(self, db_session, **kwargs):
+        return self._create_user(
+            db_session,
+            role=UserRole.admin,
+            first_name="Admin",
+            last_name="User",
+            **kwargs,
+        )
 
     def _login(self, client, username, password):
         response = client.post(
@@ -193,7 +199,7 @@ class AdminAuthTestsMixin:
         return getattr(client, method)(url)
 
     def test_admin_user_allowed(self, client, db_session):
-        self._create_admin_user(db_session, self.username, self.password)
+        self._create_admin_user(db_session, username=self.username, password=self.password)
         self._login(client, self.username, self.password)
 
         response = self._request(client, self.url)
