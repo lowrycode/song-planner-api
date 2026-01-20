@@ -79,6 +79,5 @@ class UserAccountResponse(UserAccountBase):
     church_id: int
 
 
-class UserWithAccessesResponse(UserAccountBase):
-    id: int
+class UserWithAccessesResponse(UserAccountResponse):
     accesses: AllAccessResponse
