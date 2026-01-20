@@ -96,8 +96,8 @@ def list_users_with_accesses(
             first_name=user.first_name,
             last_name=user.last_name,
             role=user.role,
-            network_id=user.network_id,
-            church_id=user.church_id,
+            network=user.network,
+            church=user.church,
             accesses={
                 "networks": [
                     NetworkAccess(

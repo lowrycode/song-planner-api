@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from app.models import UserRole
 from app.schemas.auth import UsernameBase
+from app.schemas.networks import NetworkSchema, ChurchSchema
 
 
 # Shared Schemas
@@ -75,8 +76,8 @@ class AllAccessResponse(BaseModel):
 class UserAccountResponse(UserAccountBase):
     id: int
     role: UserRole
-    network_id: int
-    church_id: int
+    network: NetworkSchema
+    church: ChurchSchema
 
 
 class UserWithAccessesResponse(UserAccountResponse):

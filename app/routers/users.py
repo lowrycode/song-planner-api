@@ -507,7 +507,15 @@ def get_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_min_role(UserRole.normal)),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = (
+        db.query(User)
+        .options(
+            joinedload(User.network),
+            joinedload(User.church),
+        )
+        .filter(User.id == user_id)
+        .first()
+    )
     if not user:
         raise HTTPException(404, "User not found")
 

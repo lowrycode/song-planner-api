@@ -533,8 +533,8 @@ class TestGetUser(BaseTestHelpers, AuthTestsMixin):
         assert data["first_name"] == user.first_name
         assert data["last_name"] == user.last_name
         assert data["role"] == user.role
-        assert data["network_id"] == user.network_id
-        assert data["church_id"] == user.church_id
+        assert data["network"]["id"] == user.network_id
+        assert data["church"]["id"] == user.church_id
 
     def test_admin_can_get_user_in_same_network(self, client, db_session):
         # Create admin user and login
@@ -706,8 +706,8 @@ class TestUpdateUser(BaseTestHelpers, AuthTestsMixin):
         assert data["last_name"] == "User"
         # Role, network_id, church_id remain unchanged for regular user
         assert data["role"] == user.role
-        assert data["network_id"] == user.network_id
-        assert data["church_id"] == user.church_id
+        assert data["network"]["id"] == user.network_id
+        assert data["church"]["id"] == user.church_id
 
     def test_user_cannot_update_other_user(self, client, db_session):
         user1 = self._create_user(db_session, username="user1", password=self.password)
@@ -756,8 +756,8 @@ class TestUpdateUser(BaseTestHelpers, AuthTestsMixin):
         assert data["id"] == user.id
         assert data["username"] == "updateduser"
         assert data["role"] == UserRole.editor
-        assert data["network_id"] == admin.network.id
-        assert data["church_id"] == admin.church.id
+        assert data["network"]["id"] == user.network_id
+        assert data["church"]["id"] == user.church_id
 
     def test_admin_cannot_update_user_in_other_network(self, client, db_session):
         network1 = self._create_network(db_session, "Network 1", slug="network-1")
