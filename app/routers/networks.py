@@ -98,6 +98,7 @@ def list_users_with_accesses(
             role=user.role,
             network=user.network,
             church=user.church,
+            created_at=user.created_at,
             accesses={
                 "networks": [
                     NetworkAccess(

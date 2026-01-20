@@ -1,4 +1,5 @@
 from pydantic import BaseModel, ConfigDict
+from datetime import datetime
 from app.models import UserRole
 from app.schemas.auth import UsernameBase
 from app.schemas.networks import NetworkSchema, ChurchSchema
@@ -81,4 +82,5 @@ class UserAccountResponse(UserAccountBase):
 
 
 class UserWithAccessesResponse(UserAccountResponse):
+    created_at: datetime
     accesses: AllAccessResponse
