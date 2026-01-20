@@ -290,4 +290,14 @@ def get_me(user: User = Depends(get_current_user)):
         first_name=user.first_name,
         last_name=user.last_name,
         role=UserRole(user.role).name,
+        network={
+            "id": user.network_id,
+            "name": user.network.name,
+            "slug": user.network.slug
+        },
+        church={
+            "id": user.church_id,
+            "name": user.church.name,
+            "slug": user.church.slug
+        }
     )

@@ -1,6 +1,18 @@
 from pydantic import BaseModel, field_validator
 
 
+class Network(BaseModel):
+    id: int
+    name: str
+    slug: str
+
+
+class Church(BaseModel):
+    id: int
+    name: str
+    slug: str
+
+
 # Request models
 class UsernameBase(BaseModel):
     username: str
@@ -49,6 +61,8 @@ class UserMeResponse(BaseModel):
     first_name: str | None
     last_name: str | None
     role: str
+    network: Network | None
+    church: Church | None
 
 
 class ChangePasswordRequest(BaseModel):
