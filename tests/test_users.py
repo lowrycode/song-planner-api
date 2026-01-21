@@ -1321,7 +1321,7 @@ class TestGetChurchAccessForUser(BaseTestHelpers, AuthTestsMixin):
 
 
 class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
-    url_template = "/users/{user_id}/access/all"
+    url_template = "/users/{user_id}/access"
     http_method = "get"
 
     def _get_url(self, user_id: int) -> str:

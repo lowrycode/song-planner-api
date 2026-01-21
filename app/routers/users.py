@@ -421,7 +421,7 @@ def remove_church_activity_access(
 
 
 @router.get(
-    "/{user_id}/access/all",
+    "/{user_id}/access",
     response_model=AllAccessResponse,
     status_code=status.HTTP_200_OK,
 )
