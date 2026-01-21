@@ -79,8 +79,8 @@ class UserAccountResponse(UserAccountBase):
     role: UserRole
     network: NetworkSchema
     church: ChurchSchema
+    created_at: datetime
 
 
 class UserWithAccessesResponse(UserAccountResponse):
-    created_at: datetime
     accesses: AllAccessResponse
