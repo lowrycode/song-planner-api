@@ -22,12 +22,22 @@ from app.dependencies import require_min_role
 router = APIRouter()
 
 
-@router.get("/", response_model=list[NetworkSchema])
+@router.get(
+    "/",
+    response_model=list[NetworkSchema],
+    tags=["networks"],
+    summary="(public) Lists all networks",
+)
 def list_networks(db: Session = Depends(get_db)):
     return db.query(Network).order_by(Network.name.asc()).all()
 
 
-@router.get("/{network_id}/churches", response_model=list[ChurchSchema])
+@router.get(
+    "/{network_id}/churches",
+    response_model=list[ChurchSchema],
+    tags=["networks"],
+    summary="(public) Lists all churches within a network",
+)
 def list_churches_by_network(network_id: int, db: Session = Depends(get_db)):
     return (
         db.query(Church)
@@ -41,6 +51,11 @@ def list_churches_by_network(network_id: int, db: Session = Depends(get_db)):
     "/{network_id}/users",
     response_model=list[UserWithAccessesResponse],
     status_code=status.HTTP_200_OK,
+    tags=["networks"],
+    summary=(
+        "(admin:network) Lists all users with account details and "
+        "access info for all users within a network"
+    ),
 )
 def list_users_with_accesses(
     network_id: int,
@@ -126,7 +141,8 @@ def list_users_with_accesses(
                         church_activity_slug=access.church_activity.slug,
                     )
                     for access in user.activity_accesses
-                ]}
+                ],
+            },
         )
         for user in users
     ]

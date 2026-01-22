@@ -31,7 +31,13 @@ IS_DEV = os.getenv("IS_DEV", False)
 SECURE = not IS_DEV  # Used for defining HTTP-only cookies
 
 
-@router.post("/register", status_code=201, response_model=UserRegisterResponse)
+@router.post(
+    "/register",
+    status_code=201,
+    response_model=UserRegisterResponse,
+    tags=["auth"],
+    summary="(public) Register user account",
+)
 def register_user(data: UserRegisterRequest, db: Session = Depends(get_db)):
     # Check if username exists
     existing = db.query(User).filter(User.username == data.username).first()
@@ -92,7 +98,12 @@ def register_user(data: UserRegisterRequest, db: Session = Depends(get_db)):
     return {"message": "User registered successfully", "user_id": new_user.id}
 
 
-@router.post("/login", response_model=UserLoginResponse)
+@router.post(
+    "/login",
+    response_model=UserLoginResponse,
+    tags=["auth"],
+    summary="(public) Login user",
+)
 def login(
     response: Response,
     form: OAuth2PasswordRequestForm = Depends(),
@@ -144,7 +155,11 @@ def login(
     return {"message": "Login successful"}
 
 
-@router.post("/refresh")
+@router.post(
+    "/refresh",
+    tags=["auth"],
+    summary="(user) Refresh access token",
+)
 def refresh_token(
     response: Response,
     refresh_token: str = Cookie(...),
@@ -209,7 +224,12 @@ def refresh_token(
     return {"message": "Tokens refreshed"}
 
 
-@router.post("/logout", response_model=UserLogoutResponse)
+@router.post(
+    "/logout",
+    response_model=UserLogoutResponse,
+    tags=["auth"],
+    summary="(user) Logout current user and revoke refresh tokens",
+)
 def logout(
     response: Response,
     refresh_token: str | None = Cookie(None),
@@ -234,7 +254,12 @@ def logout(
     return {"message": "Logged out"}
 
 
-@router.post("/change-password", response_model=ChangePasswordResponse)
+@router.post(
+    "/change-password",
+    response_model=ChangePasswordResponse,
+    tags=["auth"],
+    summary="(user) Change own password",
+)
 def change_password(
     data: ChangePasswordRequest,
     response: Response,
@@ -279,7 +304,12 @@ def change_password(
     return {"message": "Password changed successfully"}
 
 
-@router.get("/me", response_model=UserMeResponse)
+@router.get(
+    "/me",
+    response_model=UserMeResponse,
+    tags=["auth"],
+    summary="(user) Retrieve user state",
+)
 def get_me(user: User = Depends(get_current_user)):
     """
     Returns info about the currently authenticated user based on access_token cookie.
@@ -293,11 +323,11 @@ def get_me(user: User = Depends(get_current_user)):
         network={
             "id": user.network_id,
             "name": user.network.name,
-            "slug": user.network.slug
+            "slug": user.network.slug,
         },
         church={
             "id": user.church_id,
             "name": user.church.name,
-            "slug": user.church.slug
-        }
+            "slug": user.church.slug,
+        },
     )

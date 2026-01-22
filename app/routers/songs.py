@@ -33,7 +33,13 @@ from app.dependencies import require_min_role
 router = APIRouter()
 
 
-@router.get("/", status_code=200, response_model=list[SongBasicDetails])
+@router.get(
+    "/",
+    status_code=200,
+    response_model=list[SongBasicDetails],
+    tags=["songs"],
+    summary="(public) Lists all songs",
+)
 def list_songs(
     filter_query: Annotated[SongListFilters, Query()],
     db: Session = Depends(get_db),
@@ -60,7 +66,13 @@ def list_songs(
     return query.all()
 
 
-@router.get("/usages/keys", status_code=200, response_model=dict[str, int])
+@router.get(
+    "/usages/keys",
+    status_code=200,
+    response_model=dict[str, int],
+    tags=["songs"],
+    summary="(user:activity) Summarises keys for used songs",
+)
 def song_keys_overview(
     filter_query: Annotated[SongKeyFilters, Query()],
     db: Session = Depends(get_db),
@@ -115,7 +127,13 @@ def song_keys_overview(
     return response
 
 
-@router.get("/usages/types", status_code=200, response_model=SongTypeResponse)
+@router.get(
+    "/usages/types",
+    status_code=200,
+    response_model=SongTypeResponse,
+    tags=["songs"],
+    summary="(user:activity) Summarises song types for used songs",
+)
 def song_type_overview(
     filter_query: Annotated[SongTypeFilters, Query()],
     db: Session = Depends(get_db),
@@ -174,7 +192,11 @@ def song_type_overview(
 
 
 @router.get(
-    "/usages/summary", status_code=200, response_model=list[SongListUsageResponse]
+    "/usages/summary",
+    status_code=200,
+    response_model=list[SongListUsageResponse],
+    tags=["songs"],
+    summary="(user:activity) Summarises keys for used songs",
 )
 def list_songs_with_usage_summary(
     filter_query: Annotated[SongListUsageFilters, Query()],
@@ -399,7 +421,13 @@ def list_songs_with_usage_summary(
     return list(result.values())
 
 
-@router.get("/{song_id}", status_code=200, response_model=SongFullDetails)
+@router.get(
+    "/{song_id}",
+    status_code=200,
+    response_model=SongFullDetails,
+    tags=["songs"],
+    summary="(public) Retrieve song details without usage data",
+)
 def song_full_details(
     song_id: int,
     db: Session = Depends(get_db),
@@ -421,7 +449,13 @@ def song_full_details(
     return song
 
 
-@router.get("/{song_id}/usages", status_code=200, response_model=list[SongUsageSchema])
+@router.get(
+    "/{song_id}/usages",
+    status_code=200,
+    response_model=list[SongUsageSchema],
+    tags=["songs"],
+    summary="(user:activity) List song usages for specified song",
+)
 def song_usages(
     song_id: int,
     filters: Annotated[SongUsageFilters, Query()],

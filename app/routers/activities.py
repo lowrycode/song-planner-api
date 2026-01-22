@@ -4,12 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import (
-    UserRole,
-    User,
-    ChurchActivity,
-    SongUsage
-)
+from app.models import UserRole, User, ChurchActivity, SongUsage
 from app.schemas.activities import (
     ChurchActivitySchema,
 )
@@ -23,7 +18,15 @@ from app.dependencies import require_min_role
 router = APIRouter()
 
 
-@router.get("/", status_code=200, response_model=list[ChurchActivitySchema])
+@router.get(
+    "/",
+    status_code=200,
+    response_model=list[ChurchActivitySchema],
+    tags=["activities"],
+    summary=(
+        "(user:activity) Lists church activities"
+    ),
+)
 def list_viewable_church_activities(
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
@@ -42,6 +45,8 @@ def list_viewable_church_activities(
 @router.get(
     "/songs/usages/summary",
     response_model=list[SongCountByActivityResponse],
+    tags=["activities"],
+    summary="(user:activity) Lists song usages by activity",
 )
 def song_usage_by_activity(
     filter_query: Annotated[SongCountByActivityFilters, Query()],

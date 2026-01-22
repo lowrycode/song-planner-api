@@ -32,6 +32,8 @@ router = APIRouter()
     "/{user_id}/access/networks",
     response_model=list[NetworkAccess],
     status_code=status.HTTP_200_OK,
+    tags=["users"],
+    summary="(user:me | admin:network) Get network accesses for user",
 )
 def get_network_access_for_user(
     user_id: int,
@@ -92,6 +94,8 @@ def get_network_access_for_user(
     "/{user_id}/access/networks/{network_id}",
     status_code=status.HTTP_201_CREATED,
     response_model=GrantNetworkAccessResponse,
+    tags=["users"],
+    summary="(admin:network) Grant network access to user",
 )
 def grant_network_access(
     user_id: int,
@@ -140,6 +144,8 @@ def grant_network_access(
 @router.delete(
     "/{user_id}/access/networks/{network_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    tags=["users"],
+    summary="(admin:network) Remove network access from user",
 )
 def remove_network_access(
     user_id: int,
@@ -164,6 +170,8 @@ def remove_network_access(
     "/{user_id}/access/churches",
     response_model=list[ChurchAccess],
     status_code=status.HTTP_200_OK,
+    tags=["users"],
+    summary="(user:me | admin:network) Get church accesses for user",
 )
 def get_church_access_for_user(
     user_id: int,
@@ -222,6 +230,8 @@ def get_church_access_for_user(
     "/{user_id}/access/churches/{church_id}",
     status_code=status.HTTP_201_CREATED,
     response_model=GrantChurchAccessResponse,
+    tags=["users"],
+    summary="(admin:network) Grant church access to user",
 )
 def grant_church_access(
     user_id: int,
@@ -266,6 +276,8 @@ def grant_church_access(
 @router.delete(
     "/{user_id}/access/churches/{church_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    tags=["users"],
+    summary="(admin:network) Remove church access from user",
 )
 def remove_church_access(
     user_id: int,
@@ -290,6 +302,8 @@ def remove_church_access(
     "/{user_id}/access/activities",
     response_model=list[ChurchActivityAccess],
     status_code=status.HTTP_200_OK,
+    tags=["users"],
+    summary="(user:me | admin:network) Get church activity accesses for user",
 )
 def get_church_activity_access_for_user(
     user_id: int,
@@ -352,6 +366,8 @@ def get_church_activity_access_for_user(
     "/{user_id}/access/activities/{activity_id}",
     status_code=status.HTTP_201_CREATED,
     response_model=GrantChurchActivityAccessResponse,
+    tags=["users"],
+    summary="(admin:network) Grant church activity access to user",
 )
 def grant_church_activity_access(
     user_id: int,
@@ -400,6 +416,8 @@ def grant_church_activity_access(
 @router.delete(
     "/{user_id}/access/activities/{activity_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    tags=["users"],
+    summary="(admin:network) Remove church activity access from user",
 )
 def remove_church_activity_access(
     user_id: int,
@@ -424,6 +442,8 @@ def remove_church_activity_access(
     "/{user_id}/access",
     response_model=AllAccessResponse,
     status_code=status.HTTP_200_OK,
+    tags=["users"],
+    summary="(user:me | admin:network) Get all accesses for user",
 )
 def get_all_access_for_user(
     user_id: int,
@@ -501,7 +521,12 @@ def get_all_access_for_user(
     )
 
 
-@router.get("/{user_id}", response_model=UserAccountResponse)
+@router.get(
+    "/{user_id}",
+    response_model=UserAccountResponse,
+    tags=["users"],
+    summary="(user:me | admin:network) Get user account details",
+)
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -531,7 +556,12 @@ def get_user(
     return user
 
 
-@router.put("/{user_id}", response_model=UserAccountResponse)
+@router.put(
+    "/{user_id}",
+    response_model=UserAccountResponse,
+    tags=["users"],
+    summary="(user:me | admin:network) Update user account details",
+)
 def update_user(
     user_id: int,
     body: dict = Body(...),
@@ -610,6 +640,8 @@ def update_user(
 @router.delete(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    tags=["users"],
+    summary="(user:me | admin:network) Delete user account",
 )
 def delete_user(
     user_id: int,
