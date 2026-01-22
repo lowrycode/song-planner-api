@@ -28,9 +28,13 @@ app.add_middleware(
 )
 
 
-@app.get("/hello")
-def hello():
-    return {"message": "hello world"}
+@app.get("/", tags=["api-root"], summary="(public) API root info")
+def root():
+    return {
+        "message": "Welcome to the Song Analysis API",
+        "version": "1.0.0",
+        "docs_url": "/docs"
+    }
 
 
 app.include_router(activities.router, prefix="/activities")
