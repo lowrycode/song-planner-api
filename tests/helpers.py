@@ -1,3 +1,4 @@
+import re
 from datetime import date
 from app.utils.auth import hash_password
 from app.models import (
@@ -19,6 +20,9 @@ class BaseTestHelpers:
     password = "password123"
 
     # --- Helper Methods for Test Setup ---
+    def _default_slug(self, name: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
     def _create_user(
         self,
         db_session,
@@ -135,8 +139,11 @@ class BaseTestHelpers:
         return stats
 
     def _create_network(
-        self, db_session, name="Test Network", slug="test_slug"
+        self, db_session, name="Test Network", slug=None
     ):
+        if slug is None:
+            slug = self._default_slug(name)
+
         network = Network(name=name, slug=slug)
         db_session.add(network)
         db_session.commit()
@@ -144,8 +151,11 @@ class BaseTestHelpers:
         return network
 
     def _create_church(
-        self, db_session, network, name="Test Church", slug="test_slug"
+        self, db_session, network, name="Test Church", slug=None
     ):
+        if slug is None:
+            slug = self._default_slug(name)
+
         church = Church(network_id=network.id, name=name, slug=slug)
         db_session.add(church)
         db_session.commit()
@@ -157,9 +167,12 @@ class BaseTestHelpers:
         db_session,
         church,
         name="Test Activity Name",
-        slug="test_activity_name",
+        slug=None,
         type=0,
     ):
+        if slug is None:
+            slug = self._default_slug(name)
+
         church_activity = ChurchActivity(
             church_id=church.id,
             name=name,
