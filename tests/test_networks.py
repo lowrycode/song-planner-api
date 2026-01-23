@@ -290,3 +290,158 @@ class TestGetUsersWithAllAccessForNetwork(
             user_data["accesses"]["church_activities"][0]["church_activity_id"]
             == activity.id
         )
+
+
+class TestListChurchActivitiesByNetwork(
+    BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
+):
+    url_template = "/networks/{network_id}/activities"
+    http_method = "get"
+
+    def _get_url(self, network_id: int) -> str:
+        return self.url_template.format(network_id=network_id)
+
+    @property
+    def url(self):
+        return self._get_url(network_id=1)
+
+    def test_list_church_activities_success(self, client, db_session):
+        network = self._create_network(db_session)
+        church1 = self._create_church(db_session, network, name="Church A")
+        church2 = self._create_church(db_session, network, name="Church B")
+
+        activity1 = self._create_church_activity(
+            db_session, church1, name="Morning Service"
+        )
+        activity2 = self._create_church_activity(
+            db_session, church2, name="Evening Service"
+        )
+
+        admin = self._create_user(
+            db_session,
+            username="admin_user",
+            password="password",
+            role=UserRole.admin,
+            network=network,
+            church=church1,
+        )
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(network.id))
+        assert response.status_code == 200
+
+        data = response.json()
+        assert len(data) == 2
+
+        # Ordered by name
+        assert data[0]["id"] == activity2.id
+        assert data[1]["id"] == activity1.id
+
+    def test_only_returns_activities_for_given_network(self, client, db_session):
+        network1 = self._create_network(db_session, name="Network 1")
+        network2 = self._create_network(db_session, name="Network 2")
+
+        church1 = self._create_church(db_session, network1)
+        church2 = self._create_church(db_session, network2)
+
+        activity1 = self._create_church_activity(db_session, church1)
+        self._create_church_activity(db_session, church2)
+
+        admin = self._create_user(
+            db_session,
+            username="admin_user",
+            password="password",
+            role=UserRole.admin,
+            network=network1,
+            church=church1,
+        )
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(network1.id))
+        assert response.status_code == 200
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == activity1.id
+
+    def test_forbidden_if_not_admin(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        self._create_church_activity(db_session, church)
+
+        user = self._create_user(
+            db_session,
+            username="regular_user",
+            password="password",
+            network=network,
+            church=church,
+        )
+
+        self._login(client, user.username, "password")
+
+        response = client.get(self._get_url(network.id))
+        assert response.status_code == 403
+
+    def test_forbidden_if_admin_from_different_network(self, client, db_session):
+        network1 = self._create_network(db_session, name="Network 1")
+        network2 = self._create_network(db_session, name="Network 2")
+
+        church1 = self._create_church(db_session, network1)
+        church2 = self._create_church(db_session, network2)
+
+        self._create_church_activity(db_session, church2)
+
+        admin = self._create_user(
+            db_session,
+            username="admin_user",
+            password="password",
+            role=UserRole.admin,
+            network=network1,
+            church=church1,
+        )
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(network2.id))
+        assert response.status_code == 403
+
+    def test_network_not_found(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        admin = self._create_user(
+            db_session,
+            username="admin_user",
+            password="password",
+            role=UserRole.admin,
+            network=network,
+            church=church,
+        )
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(999999))
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Network not found"
+
+    def test_empty_activity_list(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        admin = self._create_user(
+            db_session,
+            username="admin_user",
+            password="password",
+            role=UserRole.admin,
+            network=network,
+            church=church,
+        )
+
+        self._login(client, admin.username, "password")
+
+        response = client.get(self._get_url(network.id))
+        assert response.status_code == 200
+        assert response.json() == []

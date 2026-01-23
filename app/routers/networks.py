@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import (
     Network,
     Church,
+    ChurchActivity,
     User,
     UserRole,
     UserNetworkAccess,
@@ -11,6 +12,7 @@ from app.models import (
     UserChurchActivityAccess,
 )
 from app.schemas.networks import NetworkSchema, ChurchSchema
+from app.schemas.activities import ChurchActivitySchema
 from app.schemas.users import (
     UserWithAccessesResponse,
     NetworkAccess,
@@ -43,6 +45,53 @@ def list_churches_by_network(network_id: int, db: Session = Depends(get_db)):
         db.query(Church)
         .filter(Church.network_id == network_id)
         .order_by(Church.name.asc())
+        .all()
+    )
+
+
+@router.get(
+    "/{network_id}/activities",
+    response_model=list[ChurchActivitySchema],
+    tags=["networks"],
+    summary="(admin:network) Lists all church activities within a network",
+)
+def list_church_activities_by_network(
+    network_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.admin)),
+):
+    """
+    Get all church activities belonging to churches within a network.
+
+    Admin-only endpoint.
+
+    Args:
+        network_id (int): Network ID.
+        db (Session): Database session.
+        current_user (User): Authenticated admin.
+
+    Raises:
+        HTTPException:
+            - 404 if network does not exist
+            - 403 if admin is not in the requested network
+
+    Returns:
+        List of church activities within the network, ordered by name.
+    """
+    # Check network exists
+    network = db.query(Network).filter(Network.id == network_id).first()
+    if not network:
+        raise HTTPException(status_code=404, detail="Network not found")
+
+    # Admin must belong to the same network
+    if current_user.network_id != network_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return (
+        db.query(ChurchActivity)
+        .join(Church)
+        .filter(Church.network_id == network_id)
+        .order_by(ChurchActivity.name.asc())
         .all()
     )
 
