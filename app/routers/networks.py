@@ -117,28 +117,28 @@ def list_users_with_accesses(
             accesses={
                 "networks": [
                     NetworkAccess(
-                        id=access.network.id,
+                        access_id=access.network.id,
                         network_id=access.network.id,
-                        network_name=access.network.name,
-                        network_slug=access.network.slug,
+                        name=access.network.name,
+                        slug=access.network.slug,
                     )
                     for access in user.network_accesses
                 ],
                 "churches": [
                     ChurchAccess(
-                        id=access.church.id,
+                        access_id=access.church.id,
                         church_id=access.church.id,
-                        church_name=access.church.name,
-                        church_slug=access.church.slug,
+                        name=access.church.name,
+                        slug=access.church.slug,
                     )
                     for access in user.church_accesses
                 ],
                 "church_activities": [
                     ChurchActivityAccess(
-                        id=access.church_activity.id,
+                        access_id=access.church_activity.id,
                         church_activity_id=access.church_activity.id,
-                        church_activity_name=access.church_activity.name,
-                        church_activity_slug=access.church_activity.slug,
+                        name=access.church_activity.name,
+                        slug=access.church_activity.slug,
                     )
                     for access in user.activity_accesses
                 ],
