@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from dataclasses import dataclass
 from app.utils.auth import hash_password
 from app.models import (
     Song,
@@ -12,7 +13,23 @@ from app.models import (
     Network,
     Church,
     ChurchActivity,
+    UserNetworkAccess,
+    UserChurchAccess,
+    UserChurchActivityAccess,
 )
+
+
+@dataclass
+class MultiScope:
+    network1: Network
+    network2: Network
+    network3: Network
+    church1: Church
+    church2: Church
+    church3: Church
+    activity1: ChurchActivity
+    activity2: ChurchActivity
+    activity3: ChurchActivity
 
 
 class BaseTestHelpers:
@@ -138,9 +155,7 @@ class BaseTestHelpers:
         db_session.refresh(stats)
         return stats
 
-    def _create_network(
-        self, db_session, name="Test Network", slug=None
-    ):
+    def _create_network(self, db_session, name="Test Network", slug=None):
         if slug is None:
             slug = self._default_slug(name)
 
@@ -150,9 +165,7 @@ class BaseTestHelpers:
         db_session.refresh(network)
         return network
 
-    def _create_church(
-        self, db_session, network, name="Test Church", slug=None
-    ):
+    def _create_church(self, db_session, network, name="Test Church", slug=None):
         if slug is None:
             slug = self._default_slug(name)
 
@@ -183,6 +196,54 @@ class BaseTestHelpers:
         db_session.commit()
         db_session.refresh(church_activity)
         return church_activity
+
+    def _create_network_access(self, db_session, user, network):
+        network_access = UserNetworkAccess(user_id=user.id, network_id=network.id)
+        db_session.add(network_access)
+        db_session.commit()
+        db_session.refresh(network_access)
+        return network_access
+
+    def _create_church_access(self, db_session, user, church):
+        church_access = UserChurchAccess(user_id=user.id, church_id=church.id)
+        db_session.add(church_access)
+        db_session.commit()
+        db_session.refresh(church_access)
+        return church_access
+
+    def _create_church_activity_access(self, db_session, user, church_activity):
+        church_activity_access = UserChurchActivityAccess(
+            user_id=user.id, church_activity_id=church_activity.id
+        )
+        db_session.add(church_activity_access)
+        db_session.commit()
+        db_session.refresh(church_activity_access)
+        return church_activity_access
+
+    def _create_multi_network_churches_and_activities(self, db_session) -> MultiScope:
+        network1 = self._create_network(db_session, name="Network 1")
+        network2 = self._create_network(db_session, name="Network 2")
+        network3 = self._create_network(db_session, name="Network 3")
+
+        church1 = self._create_church(db_session, network1)
+        church2 = self._create_church(db_session, network2)
+        church3 = self._create_church(db_session, network3)
+
+        activity1 = self._create_church_activity(db_session, church1)
+        activity2 = self._create_church_activity(db_session, church2)
+        activity3 = self._create_church_activity(db_session, church3)
+
+        return MultiScope(
+            network1,
+            network2,
+            network3,
+            church1,
+            church2,
+            church3,
+            activity1,
+            activity2,
+            activity3,
+        )
 
 
 class AuthTestsMixin:
