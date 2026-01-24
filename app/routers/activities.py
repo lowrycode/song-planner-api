@@ -12,7 +12,7 @@ from app.schemas.songs import (
     SongCountByActivityResponse,
     SongCountByActivityFilters,
 )
-from app.dependencies import require_min_role
+from app.dependencies import require_min_role, get_allowed_church_activity_ids
 
 
 router = APIRouter()
@@ -30,13 +30,12 @@ router = APIRouter()
 def list_viewable_church_activities(
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
-    # Todo: replace with user-permissions approach
-    viewable_activity_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     query = (
         db.query(ChurchActivity)
-        .filter(ChurchActivity.id.in_(viewable_activity_ids))
+        .filter(ChurchActivity.id.in_(allowed_activity_ids))
         .order_by(ChurchActivity.name.asc())
     )
     return query.all()
@@ -52,11 +51,11 @@ def song_usage_by_activity(
     filter_query: Annotated[SongCountByActivityFilters, Query()],
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
     usage_filters = []
 
     # Role-based activity restriction
-    allowed_activity_ids = set(range(100))
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Query param activity filter

@@ -29,9 +29,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         song_b = self._create_song(db_session, song_key="B")
 
         params = {"song_key": "A"}
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.status_code == 200
 
@@ -49,9 +47,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         song = self._create_song(db_session, is_hymn=False)
 
         params = {"song_type": "hymn"}
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.status_code == 200
 
@@ -69,9 +65,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         song = self._create_song(db_session, is_hymn=False)
 
         params = {"song_type": "song"}
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.status_code == 200
 
@@ -100,9 +94,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         )
 
         params = {"lyric": "grace"}
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.status_code == 200
 
@@ -134,9 +126,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
             "lyric": "grace",
         }
 
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.status_code == 200
 
@@ -154,9 +144,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         self._login(client, self.username, self.password)
 
         params = {"song_key": "Z"}
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.status_code == 200
         assert response.json() == []
@@ -165,9 +153,7 @@ class TestListSongs(BaseTestHelpers, AuthTestsMixin):
         self._create_user(db_session, username=self.username, password=self.password)
         self._login(client, self.username, self.password)
 
-        response = client.get(
-            f"{self.url}?unknown_param=123"
-        )
+        response = client.get(f"{self.url}?unknown_param=123")
 
         assert response.status_code == 200
 
@@ -176,9 +162,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
     url = "/songs/usages/summary"
 
     def test_get_usage_summary_success(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church1 = self._create_church(
             db_session, network, name="Church 1", slug="church_1"
@@ -207,6 +190,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage_stats(db_session, song, church_activity1, old_date, new_date)
         self._create_usage_stats(db_session, song, church_activity2, new_date, new_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         response = client.get(self.url)
 
         assert response.status_code == 200
@@ -230,9 +218,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
     # Filters
     def test_filter_from_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -246,6 +231,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, church_activity, new_date)
         self._create_usage_stats(db_session, song, church_activity, old_date, new_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -256,9 +246,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert activities[church_activity.slug]["usage_count"] == 1
 
     def test_filter_to_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -272,6 +259,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, church_activity, new_date)
         self._create_usage_stats(db_session, song, church_activity, old_date, new_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -282,9 +274,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert activities[church_activity.slug]["usage_count"] == 1
 
     def test_filter_church_activity_id_multiple(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -323,6 +312,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song, church_activity2, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = [
             ("church_activity_id", church_activity0.id),
             ("church_activity_id", church_activity2.id),
@@ -337,9 +331,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert church_activity1.slug not in activities
 
     def test_filter_song_type_hymn(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -357,6 +348,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song, church_activity, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"song_type": "hymn"}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -368,9 +364,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["id"] == hymn.id
 
     def test_filter_song_key(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -388,6 +381,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song_d, church_activity, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"song_key": "C"}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -399,9 +397,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["id"] == song_c.id
 
     def test_filter_lyric(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -422,6 +417,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song_no_match, church_activity, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"lyric": "grace"}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -433,9 +433,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["id"] == song_match.id
 
     def test_filter_first_used_in_range(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -451,6 +448,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song, church_activity, first_used, last_used
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {
             "from_date": (date.today() - timedelta(days=5)).isoformat(),
             "to_date": date.today().isoformat(),
@@ -465,9 +467,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert response.json() == []
 
     def test_filter_last_used_in_range(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -483,6 +482,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song, church_activity, first_used, last_used
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {
             "from_date": (date.today() - timedelta(days=20)).isoformat(),
             "to_date": (date.today() - timedelta(days=5)).isoformat(),
@@ -497,9 +501,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert response.json() == []
 
     def test_filter_first_and_last_used_in_range(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -528,6 +529,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song_bad, church_activity, first_bad, last_bad
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {
             "from_date": (date.today() - timedelta(days=10)).isoformat(),
             "to_date": date.today().isoformat(),
@@ -544,9 +550,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["id"] == song_ok.id
 
     def test_filter_used_in_range_includes_song(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -558,9 +561,12 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
         self._create_usage(db_session, song, activity, out_of_range)
         self._create_usage(db_session, song, activity, in_range)
-        self._create_usage_stats(
-            db_session, song, activity, out_of_range, in_range
-        )
+        self._create_usage_stats(db_session, song, activity, out_of_range, in_range)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         params = {
             "from_date": (date.today() - timedelta(days=5)).isoformat(),
@@ -568,18 +574,13 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             "used_in_range": "true",
         }
 
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         data = response.json()
         assert len(data) == 1
         assert data[0]["id"] == song.id
 
     def test_filter_used_in_range_excludes_song(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -589,9 +590,12 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         old = date.today() - timedelta(days=30)
 
         self._create_usage(db_session, song, activity, old)
-        self._create_usage_stats(
-            db_session, song, activity, old, old
-        )
+        self._create_usage_stats(db_session, song, activity, old, old)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         params = {
             "from_date": (date.today() - timedelta(days=5)).isoformat(),
@@ -599,16 +603,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             "used_in_range": "true",
         }
 
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         assert response.json() == []
 
     def test_filter_used_and_first_used_in_range(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -621,9 +620,7 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
 
         self._create_usage(db_session, song_ok, activity, first_ok)
         self._create_usage(db_session, song_ok, activity, used_ok)
-        self._create_usage_stats(
-            db_session, song_ok, activity, first_ok, used_ok
-        )
+        self._create_usage_stats(db_session, song_ok, activity, first_ok, used_ok)
 
         # Non-matching song (first_used outside range)
         song_bad = self._create_song(db_session)
@@ -637,6 +634,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song_bad, activity, first_bad, used_in_range
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {
             "from_date": (date.today() - timedelta(days=5)).isoformat(),
             "to_date": date.today().isoformat(),
@@ -644,18 +646,13 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             "first_used_in_range": "true",
         }
 
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         data = response.json()
         assert len(data) == 1
         assert data[0]["id"] == song_ok.id
 
     def test_filter_used_and_last_used_in_range(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -667,14 +664,15 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         last_bad = date.today() - timedelta(days=30)
 
         self._create_usage(db_session, song_ok, activity, last_ok)
-        self._create_usage_stats(
-            db_session, song_ok, activity, last_ok, last_ok
-        )
+        self._create_usage_stats(db_session, song_ok, activity, last_ok, last_ok)
 
         self._create_usage(db_session, song_bad, activity, last_bad)
-        self._create_usage_stats(
-            db_session, song_bad, activity, last_bad, last_bad
-        )
+        self._create_usage_stats(db_session, song_bad, activity, last_bad, last_bad)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         params = {
             "from_date": (date.today() - timedelta(days=5)).isoformat(),
@@ -683,18 +681,13 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             "last_used_in_range": "true",
         }
 
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         data = response.json()
         assert len(data) == 1
         assert data[0]["id"] == song_ok.id
 
     def test_combined_song_and_date_filters(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -711,25 +704,37 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song_bad, activity, old)
         self._create_usage_stats(db_session, song_bad, activity, old, old)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {
             "song_key": "C",
             "song_type": "hymn",
             "from_date": (date.today() - timedelta(days=5)).isoformat(),
         }
 
-        response = client.get(
-            f"{self.url}?{urlencode(params)}"
-        )
+        response = client.get(f"{self.url}?{urlencode(params)}")
 
         data = response.json()
         assert len(data) == 1
         assert data[0]["id"] == song_ok.id
 
     # Edge cases
-    def test_song_without_usage_stats_is_included(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
+    def test_no_songs_returns_empty(self, client, db_session):
+        network = self._create_network(db_session)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
         self._login(client, self.username, self.password)
 
+        response = client.get(self.url)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_song_without_usage_stats_is_included(self, client, db_session):
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -742,6 +747,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song_used, church_activity, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         response = client.get(self.url)
         data = response.json()
 
@@ -750,9 +760,6 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert song_unused.id in ids
 
     def test_zero_usage_activites_are_included(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -770,6 +777,11 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, song, activity_used, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         response = client.get(self.url)
         data = response.json()[0]["activities"]
 
@@ -777,6 +789,60 @@ class TestListSongsWithUsageSummary(BaseTestHelpers, AuthTestsMixin):
         assert data[activity_unused.slug]["usage_count"] == 0
         assert data[activity_unused.slug]["first_used"] is None
         assert data[activity_unused.slug]["last_used"] is None
+
+    # Activity ID Access
+    def test_excludes_usages_outside_allowed_activity_ids(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        allowed_activity = self._create_church_activity(
+            db_session, church, name="Allowed", slug="allowed"
+        )
+        disallowed_activity = self._create_church_activity(
+            db_session, church, name="Disallowed", slug="disallowed"
+        )
+
+        song = self._create_song(db_session, first_line="Restricted Song")
+
+        # Create usages in both activities
+        self._create_usage(db_session, song, allowed_activity)
+        self._create_usage(db_session, song, disallowed_activity)
+
+        # Create usage stats for both
+        today = date.today()
+        self._create_usage_stats(db_session, song, allowed_activity, today, today)
+        self._create_usage_stats(db_session, song, disallowed_activity, today, today)
+
+        # Grant user access ONLY to allowed_activity
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, allowed_activity)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        activities = data[0]["activities"]
+        assert allowed_activity.slug in activities
+        assert disallowed_activity.slug not in activities
+
+    def test_no_allowed_activities_returns_empty(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song = self._create_song(db_session)
+
+        self._create_usage(db_session, song, activity)
+        self._create_usage_stats(db_session, song, activity, date.today(), date.today())
+
+        self._create_user(db_session, self.username, self.password)
+        # No access granted to user
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+        assert response.status_code == 200
+        assert response.json() == []
 
 
 class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
@@ -854,9 +920,6 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         return self._get_url(1)
 
     def test_get_song_usages_success(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         church_activity = self._create_church_activity(db_session, church)
@@ -869,9 +932,12 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, church_activity, old_usage_date)
         self._create_usage(db_session, song, church_activity, new_usage_date)
 
-        response = client.get(
-            self._get_url(song.id)
-        )
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        response = client.get(self._get_url(song.id))
 
         assert response.status_code == 200
         data = response.json()
@@ -881,43 +947,45 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         assert all(u["church_activity_id"] == church_activity.id for u in data)
 
     def test_song_usages_empty_list(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
+        network = self._create_network(db_session)
         song = self._create_song(db_session)
 
-        response = client.get(
-            self._get_url(song.id)
-        )
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        response = client.get(self._get_url(song.id))
 
         assert response.status_code == 200
         assert response.json() == []
 
     def test_get_song_usages_song_not_found(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        network = self._create_network(db_session)
 
-        response = client.get(
-            self._get_url(999999)
-        )
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        response = client.get(self._get_url(999999))
 
         assert response.status_code == 404
         assert response.json()["detail"] == "Song not found"
 
     def test_get_song_usages_invalid_id_validation(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        network = self._create_network(db_session)
 
-        response = client.get(
-            self._get_url("notanumber")
-        )
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        response = client.get(self._get_url("notanumber"))
 
         assert response.status_code == 422
 
     def test_filter_from_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -935,6 +1003,11 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
 
         self._create_usage(db_session, song, activity_old, old_date)
         self._create_usage(db_session, song, activity_new, new_date)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
@@ -947,9 +1020,6 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["church_activity_id"] == activity_new.id
 
     def test_filter_to_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -968,6 +1038,11 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, activity_old, old_date)
         self._create_usage(db_session, song, activity_new, new_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self._get_url(song.id)}?{urlencode(params)}"
 
@@ -979,9 +1054,6 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         assert data[0]["church_activity_id"] == activity_old.id
 
     def test_filter_church_activity_id(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -1001,6 +1073,11 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, activity1)
         self._create_usage(db_session, song, activity2)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = [
             ("church_activity_id", activity0.id),
             ("church_activity_id", activity2.id),
@@ -1013,14 +1090,60 @@ class TestSongUsages(BaseTestHelpers, AuthTestsMixin):
         returned_ids = {u["church_activity_id"] for u in response.json()}
         assert returned_ids == {activity0.id, activity2.id}
 
+    # Activity ID Access
+    def test_excludes_usages_outside_allowed_activity_ids(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        allowed_activity = self._create_church_activity(
+            db_session, church, name="Allowed", slug="allowed"
+        )
+        disallowed_activity = self._create_church_activity(
+            db_session, church, name="Disallowed", slug="disallowed"
+        )
+
+        song = self._create_song(db_session)
+
+        # Create usages in both activities
+        self._create_usage(db_session, song, allowed_activity)
+        self._create_usage(db_session, song, disallowed_activity)
+
+        # Grant user access ONLY to allowed_activity
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, allowed_activity)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self._get_url(song.id))
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should only include usages from allowed_activity
+        returned_activity_ids = {usage["church_activity_id"] for usage in data}
+        assert allowed_activity.id in returned_activity_ids
+        assert disallowed_activity.id not in returned_activity_ids
+
+    def test_no_allowed_activities_returns_empty(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song = self._create_song(db_session)
+
+        self._create_usage(db_session, song, activity)
+
+        self._create_user(db_session, self.username, self.password)
+        # No access granted to user
+        self._login(client, self.username, self.password)
+
+        response = client.get(self._get_url(song.id))
+
+        assert response.status_code == 200
+        assert response.json() == []
+
 
 class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
     url = "songs/usages/keys"
 
     def test_key_summary_success(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1032,6 +1155,11 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song_c, activity)
         self._create_usage(db_session, song_d, activity)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         response = client.get(self.url)
 
         assert response.status_code == 200
@@ -1041,9 +1169,6 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         assert data["D"] == 1
 
     def test_filter_from_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1055,6 +1180,11 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
         self._create_usage(db_session, song, activity, old_date)
         self._create_usage(db_session, song, activity, recent_date)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
@@ -1067,9 +1197,6 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         assert data == {"C": 1}
 
     def test_filter_to_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1082,6 +1209,11 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, activity, old_date)
         self._create_usage(db_session, song, activity, recent_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -1093,9 +1225,6 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         assert data == {"C": 1}
 
     def test_filter_multiple_church_activity_ids(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -1111,6 +1240,11 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, song, activity1)
         self._create_usage(db_session, song, activity2)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = [
             ("church_activity_id", activity1.id),
             ("church_activity_id", activity2.id),
@@ -1125,9 +1259,6 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
         assert data["C"] == 2
 
     def test_unique_true_counts_distinct_songs(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1136,6 +1267,11 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
         self._create_usage(db_session, song, activity)
         self._create_usage(db_session, song, activity)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         params = {"unique": "true"}
         url = f"{self.url}?{urlencode(params)}"
@@ -1147,14 +1283,60 @@ class TestSongKeysOverview(BaseTestHelpers, AuthTestsMixin):
 
         assert data == {"C": 1}
 
+    # Activity ID Access
+    def test_excludes_usages_outside_allowed_activity_ids(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        allowed_activity = self._create_church_activity(
+            db_session, church, name="Allowed", slug="allowed"
+        )
+        disallowed_activity = self._create_church_activity(
+            db_session, church, name="Disallowed", slug="disallowed"
+        )
+
+        song = self._create_song(db_session, song_key="C")
+
+        # Create usages in both activities
+        self._create_usage(db_session, song, allowed_activity)
+        self._create_usage(db_session, song, disallowed_activity)
+
+        # Grant user access ONLY to allowed_activity
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, allowed_activity)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+
+        assert response.status_code == 200
+        data = response.json()
+        # Should only include usages from allowed_activity
+        assert "C" in data
+        # Since disallowed activity usage should be excluded, count should be 1
+        assert data["C"] == 1
+
+    def test_no_allowed_activities_returns_empty(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        song = self._create_song(db_session, song_key="C")
+
+        self._create_usage(db_session, song, activity)
+
+        self._create_user(db_session, self.username, self.password)
+        # No access granted to user
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+
+        assert response.status_code == 200
+        assert response.json() == {}
+
 
 class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
     url = "/songs/usages/types"
 
     def test_get_type_summary_success(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1175,6 +1357,11 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, normal_song, activity, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         response = client.get(self.url)
 
         assert response.status_code == 200
@@ -1185,9 +1372,6 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         assert data["song"] == 1
 
     def test_filter_from_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1201,6 +1385,11 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, hymn_song, activity, new_date)
         self._create_usage_stats(db_session, hymn_song, activity, old_date, new_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"from_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -1211,9 +1400,6 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         assert data["song"] == 0  # No normal songs used
 
     def test_filter_to_date(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1227,6 +1413,11 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         self._create_usage(db_session, normal_song, activity, new_date)
         self._create_usage_stats(db_session, normal_song, activity, old_date, new_date)
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"to_date": (date.today() - timedelta(days=5)).isoformat()}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -1237,9 +1428,6 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         assert data["hymn"] == 0  # No hymns used
 
     def test_filter_church_activity_id_multiple(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -1269,6 +1457,11 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, normal_song, activity2, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = [
             ("church_activity_id", activity1.id),
         ]
@@ -1282,9 +1475,6 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         assert data["song"] == 0
 
     def test_unique_true_counts_distinct_songs(self, client, db_session):
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
@@ -1306,6 +1496,11 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
             db_session, hymn_song2, activity, date.today(), date.today()
         )
 
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         params = {"unique": "true"}
         url = f"{self.url}?{urlencode(params)}"
 
@@ -1317,12 +1512,77 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         assert data["hymn"] == 2
 
     def test_no_usage_returns_zero_counts(self, client, db_session):
+        network = self._create_network(db_session)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        response = client.get(self.url)
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["hymn"] == 0
+        assert data["song"] == 0
+
+    # Activity ID Access
+    def test_excludes_usages_outside_allowed_activity_ids(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        allowed_activity = self._create_church_activity(
+            db_session, church, name="Allowed", slug="allowed"
+        )
+        disallowed_activity = self._create_church_activity(
+            db_session, church, name="Disallowed", slug="disallowed"
+        )
+
+        hymn_song = self._create_song(db_session, is_hymn=True)
+        normal_song = self._create_song(db_session, is_hymn=False)
+
+        # Create usages in both allowed and disallowed activities
+        self._create_usage(db_session, hymn_song, allowed_activity)
+        self._create_usage(db_session, normal_song, disallowed_activity)
+
+        today = date.today()
+        self._create_usage_stats(db_session, hymn_song, allowed_activity, today, today)
+        self._create_usage_stats(
+            db_session, normal_song, disallowed_activity, today, today
+        )
+
+        # Grant user access ONLY to allowed_activity
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, allowed_activity)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should only include counts from allowed_activity
+        assert data["hymn"] == 1
+        assert data["song"] == 0
+
+    def test_no_allowed_activities_returns_empty(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        hymn_song = self._create_song(db_session, is_hymn=True)
+        self._create_usage(db_session, hymn_song, activity)
+        self._create_usage_stats(
+            db_session, hymn_song, activity, date.today(), date.today()
+        )
+
         self._create_user(db_session, self.username, self.password)
+        # No access granted to user
         self._login(client, self.username, self.password)
 
         response = client.get(self.url)
         assert response.status_code == 200
         data = response.json()
 
+        # No allowed activities means no data
         assert data["hymn"] == 0
         assert data["song"] == 0

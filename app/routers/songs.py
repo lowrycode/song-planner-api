@@ -27,7 +27,7 @@ from app.schemas.songs import (
     SongTypeFilters,
     SongTypeResponse,
 )
-from app.dependencies import require_min_role
+from app.dependencies import require_min_role, get_allowed_church_activity_ids
 
 
 router = APIRouter()
@@ -77,16 +77,13 @@ def song_keys_overview(
     filter_query: Annotated[SongKeyFilters, Query()],
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
     # Default filters
     usage_filters = []
 
-    # Role based filters
-    # This approach breaks tests due to primary key auto-increment behaviour!
-    # allowed_activity_ids = [0, 1, 2, 3]
-    # Temp allow large range of numbers
-    allowed_activity_ids = set(range(100))
+    # User access based filters
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Activity filters
@@ -138,16 +135,13 @@ def song_type_overview(
     filter_query: Annotated[SongTypeFilters, Query()],
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
     # Default filters
     usage_filters = []
 
-    # Role based filters
-    # This approach breaks tests due to primary key auto-increment behaviour!
-    # allowed_activity_ids = [0, 1, 2, 3]
-    # Temp allow large range of numbers
-    allowed_activity_ids = set(range(100))
+    # User access based filters
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Activity filters
@@ -202,18 +196,13 @@ def list_songs_with_usage_summary(
     filter_query: Annotated[SongListUsageFilters, Query()],
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
     # Default filters
     song_filters = []
     usage_filters = []
     usage_stats_filters = []  # applied using ON (not WHERE) to show unused songs
-
-    # Role based filters
-    # This approach breaks tests due to primary key auto-increment behaviour!
-    # allowed_activity_ids = [0, 1, 2, 3]
-    # Temp allow large range of numbers
-    allowed_activity_ids = set(range(100))
 
     # Combine allowed activities with filtered activities in url params
     if filter_query.church_activity_id:
@@ -461,21 +450,28 @@ def song_usages(
     filters: Annotated[SongUsageFilters, Query()],
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
     # Ensure song exists
-    if not db.query(Song.id).filter(Song.id == song_id).first():
+    if not db.query(Song).filter_by(id=song_id).first():
         raise HTTPException(status_code=404, detail="Song not found")
 
-    query = db.query(SongUsage).filter(SongUsage.song_id == song_id)
+    # Return early if no allowed_activity_ids
+    if not allowed_activity_ids:
+        return []
 
-    # Apply filters
+    query = (
+        db.query(SongUsage)
+        .filter(SongUsage.song_id == song_id)
+        .filter(SongUsage.church_activity_id.in_(allowed_activity_ids))
+    )
+
     if filters.from_date:
         query = query.filter(SongUsage.used_date >= filters.from_date)
     if filters.to_date:
         query = query.filter(SongUsage.used_date <= filters.to_date)
     if filters.church_activity_id:
-        query = query.filter(
-            SongUsage.church_activity_id.in_(filters.church_activity_id)
-        )
+        effective_ids = set(filters.church_activity_id) & allowed_activity_ids
+        query = query.filter(SongUsage.church_activity_id.in_(effective_ids))
 
     return query.all()
