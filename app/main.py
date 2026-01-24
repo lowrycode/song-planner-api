@@ -17,8 +17,10 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        "http://localhost:5173",  # Build dev
+        "http://127.0.0.1:5173",  # Build dev
+        "http://localhost:4173",  # Build preview
+        "http://127.0.0.1:4173",  # Build preview
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
