@@ -29,6 +29,7 @@ router = APIRouter()
 
 IS_DEV = os.getenv("IS_DEV", False)
 SECURE = not IS_DEV  # Used for defining HTTP-only cookies
+SAME_SITE = "lax" if IS_DEV else "none"
 
 
 @router.post(
@@ -138,7 +139,7 @@ def login(
         value=access_token,
         httponly=True,
         secure=SECURE,
-        samesite="lax",
+        samesite=SAME_SITE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -147,7 +148,7 @@ def login(
         value=refresh_token,
         httponly=True,
         secure=SECURE,
-        samesite="lax",
+        samesite=SAME_SITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/auth/refresh",  # Restrict path to refresh endpoint
     )
@@ -207,7 +208,7 @@ def refresh_token(
         value=new_access,
         httponly=True,
         secure=SECURE,
-        samesite="lax",
+        samesite=SAME_SITE,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path="/",
     )
@@ -216,7 +217,7 @@ def refresh_token(
         value=new_refresh,
         httponly=True,
         secure=SECURE,
-        samesite="lax",
+        samesite=SAME_SITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         path="/auth/refresh",
     )
