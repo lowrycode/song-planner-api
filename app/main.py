@@ -1,8 +1,15 @@
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from app.exceptions import validation_exception_handler
 from app.routers import auth, songs, activities, networks, users
+
+
+def get_allowed_origins() -> list[str]:
+    origins = os.getenv("CORS_ALLOW_ORIGINS", "")
+    return [origin.strip() for origin in origins.split(",") if origin.strip()]
+
 
 app = FastAPI(
     title="Task Manager API",
@@ -16,14 +23,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Build dev
-        "http://127.0.0.1:5173",  # Build dev
-        "http://localhost:4173",  # Build preview
-        "http://127.0.0.1:4173",  # Build preview
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
