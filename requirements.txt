@@ -12,5 +12,6 @@ pydantic-settings
 psycopg2
 argon2-cffi
 alembic
+gunicorn
 # for tests
 httpx
