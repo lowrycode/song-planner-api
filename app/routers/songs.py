@@ -34,7 +34,7 @@ router = APIRouter()
 
 
 @router.get(
-    "/",
+    "",
     status_code=200,
     response_model=list[SongBasicDetails],
     tags=["songs"],

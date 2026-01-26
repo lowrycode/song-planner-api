@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 @router.get(
-    "/",
+    "",
     response_model=list[NetworkSchema],
     tags=["networks"],
     summary="(public) Lists all networks",
