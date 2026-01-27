@@ -150,7 +150,7 @@ def login(
         secure=SECURE,
         samesite=SAME_SITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/auth/refresh",  # Restrict path to refresh endpoint
+        path="/",
     )
 
     return {"message": "Login successful"}
@@ -166,6 +166,7 @@ def refresh_token(
     refresh_token: str = Cookie(...),
     db: Session = Depends(get_db),
 ):
+    print("Calling refresh_token endpoint")
     refresh_hash = hash_token(refresh_token)
 
     db_token = (
@@ -219,7 +220,7 @@ def refresh_token(
         secure=SECURE,
         samesite=SAME_SITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        path="/auth/refresh",
+        path="/",
     )
 
     return {"message": "Tokens refreshed"}
