@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
@@ -594,10 +596,14 @@ def update_user(
 
     """
     # Apply correct schema
-    if current_user.role == UserRole.admin:
-        data = AdminUserUpdateRequest(**body)
-    else:
-        data = UserUpdateRequest(**body)
+    try:
+        if current_user.role == UserRole.admin:
+            data = AdminUserUpdateRequest(**body)
+        else:
+            data = UserUpdateRequest(**body)
+    except ValidationError as e:
+        # Convert Pydantic validation error to HTTP 422
+        raise RequestValidationError(e.errors())
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
