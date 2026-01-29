@@ -107,7 +107,7 @@ Complex analytics logic is intentionally handled in the backend, keeping the fro
 
 The backend was developed using **test-driven development (TDD)** principles.
 - **pytest** is used as the test framework
-- httpx is used for API-level request testing
+- **httpx** is used for API-level request testing
 
 Tests focus on:
 - Authentication and authorisation correctness
