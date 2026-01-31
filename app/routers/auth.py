@@ -288,6 +288,13 @@ def change_password(
             detail="Passwords do not match",
         )
 
+    # Prevent changing password for demo user
+    if user.username == "user1":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Changing password is disabled for demo user",
+        )
+
     # Hash and save new password
     user.hashed_password = hash_password(data.new_password)
 
