@@ -13,6 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
+from pgvector.sqlalchemy import Vector
 from app.database import Base
 
 
@@ -299,13 +300,46 @@ class SongLyrics(Base):
     )
     content = Column(Text, nullable=False)
 
-    # Relationship to Song
+    # Relationships
     song = relationship("Song", back_populates="lyrics")
+    embedding = relationship(
+        "SongLyricEmbeddings",
+        back_populates="lyrics",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return (
             f"<SongLyrics(id={self.id}, song_id={self.song_id}, "
             f"content='{self.content[:10]}...')>"
+        )
+
+
+class SongLyricEmbeddings(Base):
+    __tablename__ = "song_lyric_embeddings"
+
+    id = Column(Integer, primary_key=True)
+
+    song_lyrics_id = Column(
+        Integer,
+        ForeignKey("song_lyrics.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    embedding = Column(Vector(768), nullable=False)
+
+    lyrics = relationship(
+        "SongLyrics",
+        back_populates="embedding",
+        uselist=False,
+    )
+
+    def __repr__(self):
+        return (
+            f"<SongLyricEmbeddings(id={self.id}, "
+            f"song_lyrics_id={self.song_lyrics_id})>"
         )
 
 
@@ -344,9 +378,7 @@ class Network(Base):
     churches = relationship(
         "Church", back_populates="network", cascade="all, delete-orphan"
     )
-    user_accesses = relationship(
-        "UserNetworkAccess", back_populates="network"
-    )
+    user_accesses = relationship("UserNetworkAccess", back_populates="network")
 
     def __repr__(self):
         return f"<Network id={self.id} name={self.name}>"
