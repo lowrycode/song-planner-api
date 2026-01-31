@@ -13,5 +13,7 @@ psycopg2
 argon2-cffi
 alembic
 gunicorn
+# for semantic search
+pgvector
 # for tests
 httpx
