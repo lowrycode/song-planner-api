@@ -143,8 +143,10 @@ class SongCountByActivityResponse(BaseModel):
 
 class SongThemeSearchRequest(BaseModel):
     themes: str
-    top_k: int = Field(default=10, ge=1, le=30)
+    top_k: int = Field(default=20, ge=1, le=30)
+    min_match_score: float | None = Field(default=None, ge=0, le=100)
 
 
 class SongThemeSearchResponse(SongBasicDetails):
     themes: str
+    match_score: float

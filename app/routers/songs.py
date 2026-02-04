@@ -1,8 +1,8 @@
 from datetime import date
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from sqlalchemy import select, func
-from sqlalchemy.orm import Session, joinedload, defer
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy import select, func, cast, Numeric
+from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
     Song,
@@ -11,7 +11,6 @@ from app.models import (
     SongUsageStats,
     SongThemes,
     SongThemeEmbeddings,
-    SongResources,
     UserRole,
     User,
     ChurchActivity,
@@ -497,28 +496,39 @@ def get_songs_by_theme(
     # Get embedding
     try:
         input_embedding = get_embeddings([req.themes])[0]
+
+        # Mock embedding for testing!!
+        # from tmp.defender import defender_embedding
+        # input_embedding = defender_embedding
     except EmbeddingServiceUnavailable:
         raise HTTPException(status_code=503)
 
     # Define distance logic
-    distance = SongThemeEmbeddings.embedding.l2_distance(input_embedding).label(
-        "distance"
-    )
+    distance = SongThemeEmbeddings.embedding.cosine_distance(input_embedding)
+    similarity = func.greatest(0, func.least(1, 1 - distance))
+    match_expr = cast(similarity * 100, Numeric(4, 1))
+    match_score = match_expr.label("match_score")
 
-    # Query
+    # ---------- Build query ----------
     stmt = (
         select(
             Song.id,
             Song.first_line,
             SongThemes.content.label("themes"),
-            distance,
+            match_score,
         )
         .join(SongThemes, SongThemes.id == SongThemeEmbeddings.song_themes_id)
         .join(SongLyrics, SongLyrics.id == SongThemes.song_lyrics_id)
         .join(Song, Song.id == SongLyrics.song_id)
-        .order_by(distance)
-        .limit(req.top_k)
     )
+
+    # Apply min match_score
+    if req.min_match_score is not None:
+        stmt = stmt.where(match_expr >= req.min_match_score)
+
+    # Order and apply upper limit
+    stmt = stmt.order_by(match_score.desc())
+    stmt = stmt.limit(req.top_k)
 
     results = db.execute(stmt).all()
     return results

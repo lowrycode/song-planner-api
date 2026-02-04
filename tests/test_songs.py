@@ -1627,8 +1627,9 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
         assert len(data) == 1
         assert data[0]["id"] == song.id
         assert data[0]["themes"] == "Grace, salvation"
+        assert "match_score" in data[0]
 
-    def test_get_songs_by_theme_validation_error(self, client, db_session):
+    def test_top_k_validation(self, client, db_session):
         """Test that invalid top_k values are rejected."""
         # Authenticate user to set cookies
         self._create_user(db_session, self.username, self.password)
@@ -1640,6 +1641,17 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
 
         # top_k too low
         response = client.post(self.url, json={"themes": "love", "top_k": 0})
+        assert response.status_code == 422
+
+    def test_min_match_score_validation(self, client, db_session):
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        response = client.post(
+            self.url,
+            json={"themes": "test", "min_match_score": 200},
+        )
+
         assert response.status_code == 422
 
     def test_embedding_service_unavailable(self, client, db_session):
@@ -1687,3 +1699,41 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
                 data[0]["first_line"] == "Amazing Grace"
             )  # Should be first (closer to 0.1)
             assert data[1]["first_line"] == "A Mighty Fortress"
+            assert data[0]["match_score"] >= data[1]["match_score"]
+
+    def test_min_match_score_filters_results(self, client, db_session):
+        strong_embedding = [1.0] + [0.0] * (EMBED_DIMENSIONS - 1)
+        weak_embedding = [0.0, 1.0] + [0.0] * (EMBED_DIMENSIONS - 2)
+
+        # Song 1 - strong match
+        s1 = self._create_song(db_session, first_line="Amazing Grace")
+        l1 = self._create_lyrics(db_session, s1)
+        t1 = self._create_themes(db_session, l1)
+        self._create_theme_embedding(db_session, t1, embedding=strong_embedding)
+
+        # Song 2 - weaker match
+        s2 = self._create_song(db_session, first_line="Weak Song")
+        l2 = self._create_lyrics(db_session, s2)
+        t2 = self._create_themes(db_session, l2)
+        self._create_theme_embedding(db_session, t2, embedding=weak_embedding)
+
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json={
+                    "themes": "test",
+                    "min_match_score": 90,
+                    "top_k": 10,
+                },
+            )
+
+        data = response.json()
+
+        assert len(data) == 1
+        assert data[0]["first_line"] == "Amazing Grace"
