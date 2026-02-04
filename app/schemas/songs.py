@@ -1,5 +1,5 @@
 from datetime import date
-from pydantic import BaseModel, HttpUrl, ConfigDict, field_validator
+from pydantic import BaseModel, HttpUrl, ConfigDict, field_validator, Field
 from enum import Enum
 
 
@@ -17,6 +17,11 @@ class UsageContextFilters(BaseModel):
 
 
 class SongLyricsSchema(BaseModel):
+    content: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SongThemesSchema(BaseModel):
     content: str
     model_config = ConfigDict(from_attributes=True)
 
@@ -134,3 +139,12 @@ class SongCountByActivityResponse(BaseModel):
     church_activity_name: str
     total_count: int
     unique_count: int
+
+
+class SongThemeSearchRequest(BaseModel):
+    themes: str
+    top_k: int = Field(default=10, ge=1, le=30)
+
+
+class SongThemeSearchResponse(SongBasicDetails):
+    themes: str

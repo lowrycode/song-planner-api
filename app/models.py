@@ -302,8 +302,8 @@ class SongLyrics(Base):
 
     # Relationships
     song = relationship("Song", back_populates="lyrics")
-    embedding = relationship(
-        "SongLyricEmbeddings",
+    themes = relationship(
+        "SongThemes",
         back_populates="lyrics",
         uselist=False,
         cascade="all, delete-orphan",
@@ -316,30 +316,61 @@ class SongLyrics(Base):
         )
 
 
-class SongLyricEmbeddings(Base):
-    __tablename__ = "song_lyric_embeddings"
+class SongThemes(Base):
+    __tablename__ = "song_themes"
 
     id = Column(Integer, primary_key=True)
-
     song_lyrics_id = Column(
         Integer,
         ForeignKey("song_lyrics.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,
     )
-
-    embedding = Column(Vector(768), nullable=False)
+    content = Column(Text, nullable=False)
+    generated_by = Column(String, nullable=False)
 
     lyrics = relationship(
         "SongLyrics",
+        back_populates="themes",
+        uselist=False,
+    )
+    embedding = relationship(
+        "SongThemeEmbeddings",
+        back_populates="themes",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return (
+            f"<SongThemes (id={self.id}, "
+            f"song_lyrics_id={self.song_lyrics_id})>"
+        )
+
+
+class SongThemeEmbeddings(Base):
+    __tablename__ = "song_theme_embeddings"
+
+    id = Column(Integer, primary_key=True)
+    song_themes_id = Column(
+        Integer,
+        ForeignKey("song_themes.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    embedding = Column(Vector(768), nullable=False)
+    generated_by = Column(String, nullable=False)
+
+    themes = relationship(
+        "SongThemes",
         back_populates="embedding",
         uselist=False,
     )
 
     def __repr__(self):
         return (
-            f"<SongLyricEmbeddings(id={self.id}, "
-            f"song_lyrics_id={self.song_lyrics_id})>"
+            f"<SongThemeEmbeddings (id={self.id}, "
+            f"song_themes_id={self.song_themes_id})>"
         )
 
 

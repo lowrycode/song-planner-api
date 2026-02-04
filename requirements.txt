@@ -15,5 +15,6 @@ alembic
 gunicorn
 # for semantic search
 pgvector
+google-genai
 # for tests
 httpx

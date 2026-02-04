@@ -1,14 +1,17 @@
 from datetime import date
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy import select, func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, defer
 from app.database import get_db
 from app.models import (
     Song,
     SongLyrics,
     SongUsage,
     SongUsageStats,
+    SongThemes,
+    SongThemeEmbeddings,
+    SongResources,
     UserRole,
     User,
     ChurchActivity,
@@ -26,8 +29,11 @@ from app.schemas.songs import (
     SongKeyFilters,
     SongTypeFilters,
     SongTypeResponse,
+    SongThemeSearchRequest,
+    SongThemeSearchResponse,
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
+from app.utils.rag import get_embeddings, EmbeddingServiceUnavailable
 
 
 router = APIRouter()
@@ -475,3 +481,44 @@ def song_usages(
         query = query.filter(SongUsage.church_activity_id.in_(effective_ids))
 
     return query.all()
+
+
+@router.post(
+    "/by-theme",
+    response_model=list[SongThemeSearchResponse],
+    tags=["songs"],
+    summary="(user) Retrieve top_k songs by similarity to given themes",
+)
+def get_songs_by_theme(
+    req: SongThemeSearchRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+    # Get embedding
+    try:
+        input_embedding = get_embeddings([req.themes])[0]
+    except EmbeddingServiceUnavailable:
+        raise HTTPException(status_code=503)
+
+    # Define distance logic
+    distance = SongThemeEmbeddings.embedding.l2_distance(input_embedding).label(
+        "distance"
+    )
+
+    # Query
+    stmt = (
+        select(
+            Song.id,
+            Song.first_line,
+            SongThemes.content.label("themes"),
+            distance,
+        )
+        .join(SongThemes, SongThemes.id == SongThemeEmbeddings.song_themes_id)
+        .join(SongLyrics, SongLyrics.id == SongThemes.song_lyrics_id)
+        .join(Song, Song.id == SongLyrics.song_id)
+        .order_by(distance)
+        .limit(req.top_k)
+    )
+
+    results = db.execute(stmt).all()
+    return results

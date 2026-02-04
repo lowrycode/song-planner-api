@@ -1,6 +1,12 @@
+import os
 from datetime import date, timedelta
 from urllib.parse import urlencode
+from unittest.mock import patch
 from tests.helpers import BaseTestHelpers, AuthTestsMixin
+from app.utils.rag import EmbeddingServiceUnavailable
+
+
+EMBED_DIMENSIONS = int(os.getenv("EMBED_DIMENSIONS"))
 
 
 class TestListSongs(BaseTestHelpers, AuthTestsMixin):
@@ -1586,3 +1592,98 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         # No allowed activities means no data
         assert data["hymn"] == 0
         assert data["song"] == 0
+
+
+class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
+    url = "/songs/by-theme"
+    http_method = "post"
+
+    def test_get_songs_by_theme_success(self, client, db_session):
+        """Test successful retrieval of songs based on theme similarity."""
+        # Create Song
+        song = self._create_song(db_session, first_line="Amazing Grace")
+        lyrics = self._create_lyrics(
+            db_session, song, content="Amazing grace how sweet the sound"
+        )
+        themes = self._create_themes(db_session, lyrics, content="Grace, salvation")
+        self._create_theme_embedding(
+            db_session, themes, embedding=[0.1] * EMBED_DIMENSIONS
+        )
+
+        # Authenticate user to set cookies
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        # 2. Mock the embedding service and call endpoint
+        with patch(
+            "app.routers.songs.get_embeddings", return_value=[[0.1] * EMBED_DIMENSIONS]
+        ):
+            response = client.post(self.url, json={"themes": "grace", "top_k": 5})
+
+        # 3. Assertions
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["id"] == song.id
+        assert data[0]["themes"] == "Grace, salvation"
+
+    def test_get_songs_by_theme_validation_error(self, client, db_session):
+        """Test that invalid top_k values are rejected."""
+        # Authenticate user to set cookies
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        # top_k too high (max is 30)
+        response = client.post(self.url, json={"themes": "love", "top_k": 100})
+        assert response.status_code == 422
+
+        # top_k too low
+        response = client.post(self.url, json={"themes": "love", "top_k": 0})
+        assert response.status_code == 422
+
+    def test_embedding_service_unavailable(self, client, db_session):
+        """Test handling of embedding service failure."""
+        # Authenticate user to set cookies
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings", side_effect=EmbeddingServiceUnavailable
+        ):
+            response = client.post(self.url, json={"themes": "holy", "top_k": 1})
+            assert response.status_code == 503
+
+    def test_songs_ordered_by_distance(self, client, db_session):
+        """Verify that results are actually returned in order of similarity."""
+        # Song 1 - exact match
+        s1 = self._create_song(db_session, first_line="Amazing Grace")
+        l1 = self._create_lyrics(
+            db_session, s1, content="Amazing grace how sweet the sound"
+        )
+        t1 = self._create_themes(db_session, l1, content="Grace, salvation")
+        self._create_theme_embedding(db_session, t1, embedding=[0.1] * EMBED_DIMENSIONS)
+
+        # Song 2 - distant match
+        s2 = self._create_song(db_session, first_line="A Mighty Fortress")
+        l2 = self._create_lyrics(db_session, s2, content="A mighty fortress is our God")
+        t2 = self._create_themes(db_session, l2, content="Strength, protection")
+        self._create_theme_embedding(
+            db_session, t2, embedding=[0.05] * EMBED_DIMENSIONS
+        )
+
+        # Authenticate user to set cookies
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings", return_value=[[0.1] * EMBED_DIMENSIONS]
+        ):
+            response = client.post(self.url, json={"themes": "test", "top_k": 10})
+            data = response.json()
+
+            assert len(data) == 2
+            assert (
+                data[0]["first_line"] == "Amazing Grace"
+            )  # Should be first (closer to 0.1)
+            assert data[1]["first_line"] == "A Mighty Fortress"
