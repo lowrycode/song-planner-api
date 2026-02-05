@@ -1597,6 +1597,18 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
 class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
     url = "/songs/by-theme"
     http_method = "post"
+    strong_embedding = [1.0] + [0.0] * (EMBED_DIMENSIONS - 1)
+    weak_embedding = [0.0, 1.0] + [0.0] * (EMBED_DIMENSIONS - 2)
+
+    def _payload(
+        self, themes="Themes", top_k=5, min_match_score=80, search_type="theme"
+    ):
+        return {
+            "themes": themes,
+            "top_k": top_k,
+            "min_match_score": min_match_score,
+            "search_type": search_type,
+        }
 
     def test_get_songs_by_theme_success(self, client, db_session):
         """Test successful retrieval of songs based on theme similarity."""
@@ -1607,7 +1619,7 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
         )
         themes = self._create_themes(db_session, lyrics, content="Grace, salvation")
         self._create_theme_embedding(
-            db_session, themes, embedding=[0.1] * EMBED_DIMENSIONS
+            db_session, themes, embedding=self.strong_embedding
         )
 
         # Authenticate user to set cookies
@@ -1616,9 +1628,46 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
 
         # 2. Mock the embedding service and call endpoint
         with patch(
-            "app.routers.songs.get_embeddings", return_value=[[0.1] * EMBED_DIMENSIONS]
+            "app.routers.songs.get_embeddings", return_value=[self.strong_embedding]
         ):
-            response = client.post(self.url, json={"themes": "grace", "top_k": 5})
+            response = client.post(
+                self.url,
+                json=self._payload(themes="Grace", search_type="theme"),
+            )
+
+        # 3. Assertions
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+        assert data[0]["id"] == song.id
+        assert data[0]["themes"] == "Grace, salvation"
+        assert "match_score" in data[0]
+
+    def test_get_songs_by_lyric_success(self, client, db_session):
+        """Test successful retrieval of songs based on lyric similarity."""
+        # Create Song
+        song = self._create_song(db_session, first_line="Amazing Grace")
+        lyrics = self._create_lyrics(
+            db_session, song, content="Amazing grace how sweet the sound"
+        )
+        self._create_lyric_embedding(
+            db_session, lyrics, embedding=self.strong_embedding
+        )
+        self._create_themes(db_session, lyrics, content="Grace, salvation")
+
+        # Authenticate user to set cookies
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        # 2. Mock the embedding service and call endpoint
+        with patch(
+            "app.routers.songs.get_embeddings", return_value=[self.strong_embedding]
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(themes="Grace", search_type="lyric"),
+            )
 
         # 3. Assertions
         assert response.status_code == 200
@@ -1636,22 +1685,30 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
         self._login(client, self.username, self.password)
 
         # top_k too high (max is 30)
-        response = client.post(self.url, json={"themes": "love", "top_k": 100})
+        response = client.post(self.url, json=self._payload(top_k=100))
         assert response.status_code == 422
 
         # top_k too low
-        response = client.post(self.url, json={"themes": "love", "top_k": 0})
+        response = client.post(self.url, json=self._payload(top_k=0))
         assert response.status_code == 422
 
     def test_min_match_score_validation(self, client, db_session):
+        """Test that invald min_match_score values are rejected"""
         self._create_user(db_session, self.username, self.password)
         self._login(client, self.username, self.password)
 
+        # Too high (max is 100)
         response = client.post(
             self.url,
-            json={"themes": "test", "min_match_score": 200},
+            json=self._payload(min_match_score=200),
         )
+        assert response.status_code == 422
 
+        # Too low (min is 0)
+        response = client.post(
+            self.url,
+            json=self._payload(min_match_score=-1),
+        )
         assert response.status_code == 422
 
     def test_embedding_service_unavailable(self, client, db_session):
@@ -1663,7 +1720,7 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
         with patch(
             "app.routers.songs.get_embeddings", side_effect=EmbeddingServiceUnavailable
         ):
-            response = client.post(self.url, json={"themes": "holy", "top_k": 1})
+            response = client.post(self.url, json=self._payload())
             assert response.status_code == 503
 
     def test_songs_ordered_by_distance(self, client, db_session):
@@ -1674,15 +1731,13 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
             db_session, s1, content="Amazing grace how sweet the sound"
         )
         t1 = self._create_themes(db_session, l1, content="Grace, salvation")
-        self._create_theme_embedding(db_session, t1, embedding=[0.1] * EMBED_DIMENSIONS)
+        self._create_theme_embedding(db_session, t1, embedding=self.strong_embedding)
 
         # Song 2 - distant match
         s2 = self._create_song(db_session, first_line="A Mighty Fortress")
         l2 = self._create_lyrics(db_session, s2, content="A mighty fortress is our God")
         t2 = self._create_themes(db_session, l2, content="Strength, protection")
-        self._create_theme_embedding(
-            db_session, t2, embedding=[0.05] * EMBED_DIMENSIONS
-        )
+        self._create_theme_embedding(db_session, t2, embedding=self.weak_embedding)
 
         # Authenticate user to set cookies
         self._create_user(db_session, self.username, self.password)
@@ -1691,7 +1746,7 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
         with patch(
             "app.routers.songs.get_embeddings", return_value=[[0.1] * EMBED_DIMENSIONS]
         ):
-            response = client.post(self.url, json={"themes": "test", "top_k": 10})
+            response = client.post(self.url, json=self._payload(min_match_score=0))
             data = response.json()
 
             assert len(data) == 2
@@ -1702,38 +1757,126 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
             assert data[0]["match_score"] >= data[1]["match_score"]
 
     def test_min_match_score_filters_results(self, client, db_session):
-        strong_embedding = [1.0] + [0.0] * (EMBED_DIMENSIONS - 1)
-        weak_embedding = [0.0, 1.0] + [0.0] * (EMBED_DIMENSIONS - 2)
-
         # Song 1 - strong match
         s1 = self._create_song(db_session, first_line="Amazing Grace")
         l1 = self._create_lyrics(db_session, s1)
         t1 = self._create_themes(db_session, l1)
-        self._create_theme_embedding(db_session, t1, embedding=strong_embedding)
+        self._create_theme_embedding(db_session, t1, embedding=self.strong_embedding)
 
         # Song 2 - weaker match
         s2 = self._create_song(db_session, first_line="Weak Song")
         l2 = self._create_lyrics(db_session, s2)
         t2 = self._create_themes(db_session, l2)
-        self._create_theme_embedding(db_session, t2, embedding=weak_embedding)
+        self._create_theme_embedding(db_session, t2, embedding=self.weak_embedding)
 
         self._create_user(db_session, self.username, self.password)
         self._login(client, self.username, self.password)
 
         with patch(
             "app.routers.songs.get_embeddings",
-            return_value=[strong_embedding],
+            return_value=[self.strong_embedding],
         ):
             response = client.post(
                 self.url,
-                json={
-                    "themes": "test",
-                    "min_match_score": 90,
-                    "top_k": 10,
-                },
+                json=self._payload(min_match_score=50),
             )
 
         data = response.json()
 
         assert len(data) == 1
         assert data[0]["first_line"] == "Amazing Grace"
+
+    def test_lyric_search_without_themes(self, client, db_session):
+        """Lyric search should still return songs even if themes are missing."""
+        # Create Song + Lyrics
+        song = self._create_song(db_session, first_line="Theme-less Song")
+        lyrics = self._create_lyrics(
+            db_session, song, content="Some meaningful lyric content"
+        )
+
+        # Create lyric embedding ONLY (no themes)
+        self._create_lyric_embedding(
+            db_session, lyrics, embedding=self.strong_embedding
+        )
+
+        # Authenticate user
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        # Mock embedding service
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(search_type="lyric"),
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        assert len(data) == 1
+        assert data[0]["id"] == song.id
+
+        # Themes may be None depending on response model behaviour
+        assert "themes" in data[0]
+        assert "match_score" in data[0]
+
+    def test_song_without_embedding_not_returned(self, client, db_session):
+        """Songs without embeddings should not appear in results."""
+        # Create Song + Lyrics + Themes (NO embeddings)
+        song = self._create_song(db_session, first_line="No Embedding Song")
+        lyrics = self._create_lyrics(db_session, song)
+        self._create_themes(db_session, lyrics)
+
+        # Authenticate user
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        # Mock embedding service
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(min_match_score=0),
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Song should not appear because embedding missing
+        assert all(d["id"] != song.id for d in data)
+
+    def test_default_parameters_used(self, client, db_session):
+        """Verify endpoint applies default request parameters."""
+        # Create Song + Lyrics + Embedding
+        song = self._create_song(db_session, first_line="Default Test Song")
+        lyrics = self._create_lyrics(db_session, song)
+        self._create_lyric_embedding(
+            db_session, lyrics, embedding=self.strong_embedding
+        )
+        self._create_themes(db_session, lyrics)
+
+        # Authenticate
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            # Only send required field
+            response = client.post(
+                self.url,
+                json={"themes": "grace"},
+            )
+
+        assert response.status_code == 200
+        data = response.json()
+
+        # Should still return result (default search_type = lyric)
+        assert len(data) == 1
+        assert data[0]["id"] == song.id

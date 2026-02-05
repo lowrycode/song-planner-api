@@ -1,5 +1,6 @@
 from datetime import date
 from pydantic import BaseModel, HttpUrl, ConfigDict, field_validator, Field
+from typing import Literal
 from enum import Enum
 
 
@@ -144,9 +145,10 @@ class SongCountByActivityResponse(BaseModel):
 class SongThemeSearchRequest(BaseModel):
     themes: str
     top_k: int = Field(default=20, ge=1, le=30)
-    min_match_score: float | None = Field(default=None, ge=0, le=100)
+    min_match_score: float | None = Field(default=75, ge=0, le=100)
+    search_type: Literal["lyric", "theme"] = "lyric"
 
 
 class SongThemeSearchResponse(SongBasicDetails):
-    themes: str
+    themes: str | None
     match_score: float

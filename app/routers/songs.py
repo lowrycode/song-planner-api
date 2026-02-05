@@ -11,6 +11,7 @@ from app.models import (
     SongUsageStats,
     SongThemes,
     SongThemeEmbeddings,
+    SongLyricEmbeddings,
     UserRole,
     User,
     ChurchActivity,
@@ -493,42 +494,49 @@ def get_songs_by_theme(
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
-    # Get embedding
     try:
         input_embedding = get_embeddings([req.themes])[0]
-
-        # Mock embedding for testing!!
-        # from tmp.defender import defender_embedding
-        # input_embedding = defender_embedding
     except EmbeddingServiceUnavailable:
         raise HTTPException(status_code=503)
 
-    # Define distance logic
-    distance = SongThemeEmbeddings.embedding.cosine_distance(input_embedding)
+    if req.search_type == "lyric":
+        embedding_model = SongLyricEmbeddings
+        base_query = (
+            select(
+                Song.id,
+                Song.first_line,
+                SongThemes.content.label("themes"),
+            )
+            .select_from(embedding_model)
+            .join(SongLyrics, SongLyrics.id == embedding_model.song_lyrics_id)
+            .join(Song, Song.id == SongLyrics.song_id)
+            .outerjoin(SongThemes, SongThemes.song_lyrics_id == SongLyrics.id)
+        )
+    else:
+        embedding_model = SongThemeEmbeddings
+        base_query = (
+            select(
+                Song.id,
+                Song.first_line,
+                SongThemes.content.label("themes"),
+            )
+            .select_from(embedding_model)
+            .join(SongThemes, SongThemes.id == embedding_model.song_themes_id)
+            .join(SongLyrics, SongLyrics.id == SongThemes.song_lyrics_id)
+            .join(Song, Song.id == SongLyrics.song_id)
+        )
+
+    distance = embedding_model.embedding.cosine_distance(input_embedding)
     similarity = func.greatest(0, func.least(1, 1 - distance))
     match_expr = cast(similarity * 100, Numeric(4, 1))
     match_score = match_expr.label("match_score")
 
-    # ---------- Build query ----------
-    stmt = (
-        select(
-            Song.id,
-            Song.first_line,
-            SongThemes.content.label("themes"),
-            match_score,
-        )
-        .join(SongThemes, SongThemes.id == SongThemeEmbeddings.song_themes_id)
-        .join(SongLyrics, SongLyrics.id == SongThemes.song_lyrics_id)
-        .join(Song, Song.id == SongLyrics.song_id)
-    )
+    stmt = base_query.add_columns(match_score)
 
-    # Apply min match_score
     if req.min_match_score is not None:
         stmt = stmt.where(match_expr >= req.min_match_score)
 
-    # Order and apply upper limit
-    stmt = stmt.order_by(match_score.desc())
-    stmt = stmt.limit(req.top_k)
+    stmt = stmt.order_by(match_score.desc()).limit(req.top_k)
 
     results = db.execute(stmt).all()
     return results

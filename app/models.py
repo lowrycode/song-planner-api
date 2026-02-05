@@ -308,11 +308,43 @@ class SongLyrics(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    embedding = relationship(
+        "SongLyricEmbeddings",
+        back_populates="lyrics",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
 
     def __repr__(self):
         return (
             f"<SongLyrics(id={self.id}, song_id={self.song_id}, "
             f"content='{self.content[:10]}...')>"
+        )
+
+
+class SongLyricEmbeddings(Base):
+    __tablename__ = "song_lyric_embeddings"
+
+    id = Column(Integer, primary_key=True)
+    song_lyrics_id = Column(
+        Integer,
+        ForeignKey("song_lyrics.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    embedding = Column(Vector(768), nullable=False)
+    generated_by = Column(String, nullable=False)
+
+    lyrics = relationship(
+        "SongLyrics",
+        back_populates="embedding",
+        uselist=False,
+    )
+
+    def __repr__(self):
+        return (
+            f"<SongLyricEmbeddings (id={self.id}, "
+            f"song_lyrics_id={self.song_lyrics_id})>"
         )
 
 

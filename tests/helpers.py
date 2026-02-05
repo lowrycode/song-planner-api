@@ -5,6 +5,7 @@ from app.utils.auth import hash_password
 from app.models import (
     Song,
     SongLyrics,
+    SongLyricEmbeddings,
     SongThemes,
     SongThemeEmbeddings,
     SongUsage,
@@ -110,6 +111,17 @@ class BaseTestHelpers:
         db_session.commit()
         db_session.refresh(lyrics)
         return lyrics
+
+    def _create_lyric_embedding(
+        self, db_session, lyrics, embedding, generated_by="test"
+    ):
+        emb = SongLyricEmbeddings(
+            song_lyrics_id=lyrics.id, embedding=embedding, generated_by=generated_by
+        )
+        db_session.add(emb)
+        db_session.commit()
+        db_session.refresh(emb)
+        return emb
 
     def _create_themes(
         self, db_session, lyrics, content="Some themes", generated_by="test"
