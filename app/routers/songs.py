@@ -390,27 +390,30 @@ def song_usages(
     user: User = Depends(require_min_role(UserRole.normal)),
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
+
     # Ensure song exists
-    if not db.query(Song).filter_by(id=song_id).first():
+    if not db.query(Song.id).filter_by(id=song_id).first():
         raise HTTPException(status_code=404, detail="Song not found")
 
-    # Return early if no allowed_activity_ids
-    if not allowed_activity_ids:
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filters.church_activity_id,
+    )
+
+    if not effective_activity_ids:
         return []
+
+    usage_filters = build_song_usage_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=filters.from_date,
+        to_date=filters.to_date,
+    )
 
     query = (
         db.query(SongUsage)
         .filter(SongUsage.song_id == song_id)
-        .filter(SongUsage.church_activity_id.in_(allowed_activity_ids))
+        .filter(*usage_filters)
     )
-
-    if filters.from_date:
-        query = query.filter(SongUsage.used_date >= filters.from_date)
-    if filters.to_date:
-        query = query.filter(SongUsage.used_date <= filters.to_date)
-    if filters.church_activity_id:
-        effective_ids = set(filters.church_activity_id) & allowed_activity_ids
-        query = query.filter(SongUsage.church_activity_id.in_(effective_ids))
 
     return query.all()
 
