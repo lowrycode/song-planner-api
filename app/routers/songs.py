@@ -34,6 +34,7 @@ from app.schemas.songs import (
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
 from app.utils.rag import get_embeddings, EmbeddingServiceUnavailable
+from app.utils.songs import get_effective_activity_ids
 
 
 router = APIRouter()
@@ -93,14 +94,11 @@ def song_keys_overview(
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Activity filters
-    allowed_activites = allowed_activity_ids
-    if filter_query.church_activity_id:
-        effective_activites = list(
-            set(allowed_activites) & set(filter_query.church_activity_id)
-        )
-    else:
-        effective_activites = allowed_activites
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activites))
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filter_query.church_activity_id,
+    )
+    usage_filters.append(SongUsage.church_activity_id.in_(effective_activity_ids))
 
     # Date filters
     from_date = filter_query.from_date or date(1900, 1, 1)
@@ -151,14 +149,11 @@ def song_type_overview(
     usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
 
     # Activity filters
-    allowed_activites = allowed_activity_ids
-    if filter_query.church_activity_id:
-        effective_activites = list(
-            set(allowed_activites) & set(filter_query.church_activity_id)
-        )
-    else:
-        effective_activites = allowed_activites
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activites))
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filter_query.church_activity_id,
+    )
+    usage_filters.append(SongUsage.church_activity_id.in_(effective_activity_ids))
 
     # Date filters
     from_date = filter_query.from_date or date(1900, 1, 1)
@@ -211,21 +206,17 @@ def list_songs_with_usage_summary(
     usage_stats_filters = []  # applied using ON (not WHERE) to show unused songs
 
     # Combine allowed activities with filtered activities in url params
-    if filter_query.church_activity_id:
-        effective_activities = allowed_activity_ids & set(
-            filter_query.church_activity_id
-        )
-    else:
-        effective_activities = allowed_activity_ids
-
-    effective_activities = list(effective_activities)
-    if not effective_activities:
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filter_query.church_activity_id,
+    )
+    if not effective_activity_ids:
         return []
 
     # Activities filter
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activities))
+    usage_filters.append(SongUsage.church_activity_id.in_(effective_activity_ids))
     usage_stats_filters.append(
-        SongUsageStats.church_activity_id.in_(effective_activities)
+        SongUsageStats.church_activity_id.in_(effective_activity_ids)
     )
 
     # Date filters
@@ -398,7 +389,7 @@ def list_songs_with_usage_summary(
     activity_map = {
         e.id: (e.slug, e.name)
         for e in db.query(ChurchActivity).filter(
-            ChurchActivity.id.in_(effective_activities)
+            ChurchActivity.id.in_(effective_activity_ids)
         )
     }
 

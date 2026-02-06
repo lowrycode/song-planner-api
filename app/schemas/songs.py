@@ -14,7 +14,7 @@ class SongType(str, Enum):
 class UsageContextFilters(BaseModel):
     from_date: date | None = None
     to_date: date | None = None
-    church_activity_id: list[int] | None = None
+    church_activity_id: set[int] | None = None
 
 
 class SongLyricsSchema(BaseModel):
