@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import select, func, cast, Numeric
@@ -34,7 +33,11 @@ from app.schemas.songs import (
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
 from app.utils.rag import get_embeddings, EmbeddingServiceUnavailable
-from app.utils.songs import get_effective_activity_ids
+from app.utils.songs import (
+    get_effective_activity_ids,
+    build_song_usage_filters,
+    build_song_usage_stats_filters,
+)
 
 
 router = APIRouter()
@@ -87,23 +90,18 @@ def song_keys_overview(
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
-    # Default filters
-    usage_filters = []
-
-    # User access based filters
-    usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
-
     # Activity filters
     effective_activity_ids = get_effective_activity_ids(
         allowed_activity_ids=allowed_activity_ids,
         filter_activity_ids=filter_query.church_activity_id,
     )
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activity_ids))
 
-    # Date filters
-    from_date = filter_query.from_date or date(1900, 1, 1)
-    to_date = filter_query.to_date or date(2100, 1, 1)
-    usage_filters.append(SongUsage.used_date.between(from_date, to_date))
+    # Usage Filters
+    usage_filters = build_song_usage_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=filter_query.from_date,
+        to_date=filter_query.to_date,
+    )
 
     # Unique filter
     count_expr = (
@@ -142,23 +140,18 @@ def song_type_overview(
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
-    # Default filters
-    usage_filters = []
-
-    # User access based filters
-    usage_filters.append(SongUsage.church_activity_id.in_(allowed_activity_ids))
-
     # Activity filters
     effective_activity_ids = get_effective_activity_ids(
         allowed_activity_ids=allowed_activity_ids,
         filter_activity_ids=filter_query.church_activity_id,
     )
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activity_ids))
 
-    # Date filters
-    from_date = filter_query.from_date or date(1900, 1, 1)
-    to_date = filter_query.to_date or date(2100, 1, 1)
-    usage_filters.append(SongUsage.used_date.between(from_date, to_date))
+    # Usage Filters
+    usage_filters = build_song_usage_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=filter_query.from_date,
+        to_date=filter_query.to_date,
+    )
 
     # Unique filter
     count_expr = (
@@ -202,8 +195,6 @@ def list_songs_with_usage_summary(
 
     # Default filters
     song_filters = []
-    usage_filters = []
-    usage_stats_filters = []  # applied using ON (not WHERE) to show unused songs
 
     # Combine allowed activities with filtered activities in url params
     effective_activity_ids = get_effective_activity_ids(
@@ -213,16 +204,21 @@ def list_songs_with_usage_summary(
     if not effective_activity_ids:
         return []
 
-    # Activities filter
-    usage_filters.append(SongUsage.church_activity_id.in_(effective_activity_ids))
-    usage_stats_filters.append(
-        SongUsageStats.church_activity_id.in_(effective_activity_ids)
+    # Usage Filters
+    usage_filters = build_song_usage_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=filter_query.from_date,
+        to_date=filter_query.to_date,
     )
 
-    # Date filters
-    from_date = filter_query.from_date or date(1900, 1, 1)
-    to_date = filter_query.to_date or date(2100, 1, 1)
-    usage_filters.append(SongUsage.used_date.between(from_date, to_date))
+    # Usage Stats Filters
+    usage_stats_filters = build_song_usage_stats_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=filter_query.from_date,
+        to_date=filter_query.to_date,
+        first_used_in_range=filter_query.first_used_in_range,
+        last_used_in_range=filter_query.last_used_in_range,
+    )
 
     # Build song_id filter once, using set logic instead of nested queries
     song_id_filters = None
@@ -236,20 +232,8 @@ def list_songs_with_usage_summary(
         filters_to_apply = []
 
         if filter_query.first_used_in_range or filter_query.last_used_in_range:
-            first_last_filters = []
-            if filter_query.first_used_in_range:
-                first_last_filters.append(
-                    SongUsageStats.first_used.between(from_date, to_date)
-                )
-            if filter_query.last_used_in_range:
-                first_last_filters.append(
-                    SongUsageStats.last_used.between(from_date, to_date)
-                )
-
             song_ids_first_last = (
-                db.query(SongUsageStats.song_id)
-                .filter(*usage_stats_filters, *first_last_filters)
-                .distinct()
+                db.query(SongUsageStats.song_id).filter(*usage_stats_filters).distinct()
             )
             filters_to_apply.append(song_ids_first_last)
 
