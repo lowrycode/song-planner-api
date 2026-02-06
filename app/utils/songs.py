@@ -1,6 +1,8 @@
 from datetime import date
-from app.models import SongUsage, SongUsageStats
+from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
+from app.models import Song, SongLyrics, SongUsage, SongUsageStats
+from app.schemas.songs import SongType
 
 MIN_USAGE_DATE = date(1900, 1, 1)
 MAX_USAGE_DATE = date(2100, 1, 1)
@@ -52,5 +54,37 @@ def build_song_usage_stats_filters(
         filters.append(SongUsageStats.first_used.between(from_date, to_date))
     if last_used_in_range:
         filters.append(SongUsageStats.last_used.between(from_date, to_date))
+
+    return filters
+
+
+def build_song_filters(
+    db: Session,
+    song_key: str | None,
+    song_type: SongType | None = None,
+    lyric: str | None = None,
+) -> list[ColumnElement]:
+    """
+    Builds SQLAlchemy filters for querying Songs based on key, type, and lyric content.
+    """
+
+    filters = []
+    if song_key:
+        filters.append(Song.song_key == song_key)
+    if song_type:
+        if song_type == SongType.song:
+            filters.append(Song.is_hymn.is_(False))
+        elif song_type == SongType.hymn:
+            filters.append(Song.is_hymn.is_(True))
+    if lyric:
+        lyrics_subquery = (
+            db.query(SongLyrics.id)
+            .filter(
+                SongLyrics.song_id == Song.id,
+                SongLyrics.content.ilike(f"%{lyric}%"),
+            )
+            .exists()
+        )
+        filters.append(lyrics_subquery)
 
     return filters

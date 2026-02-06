@@ -37,6 +37,7 @@ from app.utils.songs import (
     get_effective_activity_ids,
     build_song_usage_filters,
     build_song_usage_stats_filters,
+    build_song_filters,
 )
 
 
@@ -56,23 +57,14 @@ def list_songs(
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
 
-    query = db.query(Song)
+    song_filters = build_song_filters(
+        db=db,
+        song_key=filter_query.song_key,
+        song_type=filter_query.song_type,
+        lyric=filter_query.lyric,
+    )
 
-    if filter_query.song_key is not None:
-        query = query.filter(Song.song_key == filter_query.song_key)
-    if filter_query.song_type:
-        song_type = filter_query.song_type
-        if song_type == "song":
-            query = query.filter(Song.is_hymn.is_(False))
-        elif song_type == "hymn":
-            query = query.filter(Song.is_hymn.is_(True))
-    if filter_query.lyric is not None:
-        query = query.join(SongLyrics).filter(
-            SongLyrics.song_id == Song.id,
-            SongLyrics.content.ilike(f"%{filter_query.lyric}%"),
-        )
-
-    query = query.order_by(Song.first_line.asc())
+    query = db.query(Song).filter(*song_filters).order_by(Song.first_line.asc())
     return query.all()
 
 
@@ -193,9 +185,6 @@ def list_songs_with_usage_summary(
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
-    # Default filters
-    song_filters = []
-
     # Combine allowed activities with filtered activities in url params
     effective_activity_ids = get_effective_activity_ids(
         allowed_activity_ids=allowed_activity_ids,
@@ -252,24 +241,12 @@ def list_songs_with_usage_summary(
             song_id_filters = filters_to_apply[0].subquery()
 
     # Other filters
-    if filter_query.song_key:
-        song_filters.append(Song.song_key == filter_query.song_key)
-    if filter_query.song_type:
-        song_type = filter_query.song_type
-        if song_type == "song":
-            song_filters.append(Song.is_hymn.is_(False))
-        elif song_type == "hymn":
-            song_filters.append(Song.is_hymn.is_(True))
-    if filter_query.lyric:
-        lyrics_subquery = (
-            db.query(SongLyrics.id)
-            .filter(
-                SongLyrics.song_id == Song.id,
-                SongLyrics.content.ilike(f"%{filter_query.lyric}%"),
-            )
-            .exists()
-        )
-        song_filters.append(lyrics_subquery)
+    song_filters = build_song_filters(
+        db=db,
+        song_key=filter_query.song_key,
+        song_type=filter_query.song_type,
+        lyric=filter_query.lyric,
+    )
 
     # Usage sub-queries (both apply usage_filters)
     usage_counts_by_activity = (
