@@ -1,6 +1,7 @@
 from datetime import date
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.selectable import Subquery
 from app.models import Song, SongLyrics, SongUsage, SongUsageStats
 from app.schemas.songs import SongType
 
@@ -88,3 +89,40 @@ def build_song_filters(
         filters.append(lyrics_subquery)
 
     return filters
+
+
+def resolve_usage_filtered_song_ids(
+    db: Session,
+    first_used_in_range: bool,
+    last_used_in_range: bool,
+    used_in_range: bool,
+    usage_filters: list[ColumnElement],
+    usage_stats_filters: list[ColumnElement],
+) -> Subquery | None:
+    """
+    Builds SQLAlchemy filters for SongUsageStats using activity scope,
+    and optional first/last usage range filters.
+    """
+    song_id_queries = []
+
+    if first_used_in_range or last_used_in_range:
+        song_id_queries.append(
+            db.query(SongUsageStats.song_id).filter(*usage_stats_filters).distinct()
+        )
+
+    if used_in_range:
+        song_id_queries.append(
+            db.query(SongUsage.song_id).filter(*usage_filters).distinct()
+        )
+
+    match len(song_id_queries):
+        case 0:
+            return None
+        case 1:
+            return song_id_queries[0].subquery()
+        case 2:
+            return song_id_queries[0].intersect(song_id_queries[1]).subquery()
+        case _:
+            raise ValueError(
+                f"Unexpected number of song_id_queries: {len(song_id_queries)}"
+            )

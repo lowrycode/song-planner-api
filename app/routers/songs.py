@@ -1,6 +1,6 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy import select, func, cast, Numeric
+from sqlalchemy import select, func, cast, Numeric, and_
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models import (
@@ -38,6 +38,7 @@ from app.utils.songs import (
     build_song_usage_filters,
     build_song_usage_stats_filters,
     build_song_filters,
+    resolve_usage_filtered_song_ids,
 )
 
 
@@ -185,13 +186,21 @@ def list_songs_with_usage_summary(
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
-    # Combine allowed activities with filtered activities in url params
+    # Activities Filter
     effective_activity_ids = get_effective_activity_ids(
         allowed_activity_ids=allowed_activity_ids,
         filter_activity_ids=filter_query.church_activity_id,
     )
     if not effective_activity_ids:
         return []
+
+    # Song filters
+    song_filters = build_song_filters(
+        db=db,
+        song_key=filter_query.song_key,
+        song_type=filter_query.song_type,
+        lyric=filter_query.lyric,
+    )
 
     # Usage Filters
     usage_filters = build_song_usage_filters(
@@ -209,46 +218,17 @@ def list_songs_with_usage_summary(
         last_used_in_range=filter_query.last_used_in_range,
     )
 
-    # Build song_id filter once, using set logic instead of nested queries
-    song_id_filters = None
-
-    # First/last and used_in_range filters
-    if (
-        filter_query.first_used_in_range
-        or filter_query.last_used_in_range
-        or filter_query.used_in_range
-    ):
-        filters_to_apply = []
-
-        if filter_query.first_used_in_range or filter_query.last_used_in_range:
-            song_ids_first_last = (
-                db.query(SongUsageStats.song_id).filter(*usage_stats_filters).distinct()
-            )
-            filters_to_apply.append(song_ids_first_last)
-
-        if filter_query.used_in_range:
-            song_ids_used = (
-                db.query(SongUsage.song_id).filter(*usage_filters).distinct()
-            )
-            filters_to_apply.append(song_ids_used)
-
-        # Combine using intersection if both filters present
-        if len(filters_to_apply) == 2:
-            song_id_filters = (
-                filters_to_apply[0].intersect(filters_to_apply[1]).subquery()
-            )
-        else:
-            song_id_filters = filters_to_apply[0].subquery()
-
-    # Other filters
-    song_filters = build_song_filters(
+    # Song IDs subquery filtered by usages
+    eligible_song_ids_from_usage = resolve_usage_filtered_song_ids(
         db=db,
-        song_key=filter_query.song_key,
-        song_type=filter_query.song_type,
-        lyric=filter_query.lyric,
+        first_used_in_range=filter_query.first_used_in_range,
+        last_used_in_range=filter_query.last_used_in_range,
+        used_in_range=filter_query.used_in_range,
+        usage_filters=usage_filters,
+        usage_stats_filters=usage_stats_filters,
     )
 
-    # Usage sub-queries (both apply usage_filters)
+    # Usage Aggregate sub-queries
     usage_counts_by_activity = (
         db.query(
             SongUsage.song_id.label("song_id"),
@@ -268,9 +248,10 @@ def list_songs_with_usage_summary(
         .group_by(SongUsage.song_id)
     ).subquery()
 
-    usage_stats_join_condition = SongUsageStats.song_id == Song.id
-    for f in usage_stats_filters:
-        usage_stats_join_condition = usage_stats_join_condition & f
+    usage_stats_join_condition = and_(
+        SongUsageStats.song_id == Song.id,
+        *usage_stats_filters,
+    )
 
     # Overall query (applies usage_stats_filters)
     query = (
@@ -299,12 +280,11 @@ def list_songs_with_usage_summary(
     )
 
     # Apply other filters
-    # query = query.filter(*usage_stats_filters)
     query = query.filter(*song_filters)
 
-    # Filter further (using song_ids derived from first_last filters)
-    if song_id_filters is not None:
-        query = query.filter(Song.id.in_(select(song_id_filters)))
+    # Filter further (using song_ids after all usage filters are resolved)
+    if eligible_song_ids_from_usage is not None:
+        query = query.filter(Song.id.in_(select(eligible_song_ids_from_usage)))
 
     # Query DB
     rows = query.all()
