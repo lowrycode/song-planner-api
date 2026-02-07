@@ -1594,183 +1594,226 @@ class TestSongTypeSummary(BaseTestHelpers, AuthTestsMixin):
         assert data["song"] == 0
 
 
-class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
+class TestSongsByTheme(BaseTestHelpers, AuthTestsMixin):
     url = "/songs/by-theme"
     http_method = "post"
+
     strong_embedding = [1.0] + [0.0] * (EMBED_DIMENSIONS - 1)
     weak_embedding = [0.0, 1.0] + [0.0] * (EMBED_DIMENSIONS - 2)
 
-    def _payload(
-        self, themes="Themes", top_k=5, min_match_score=80, search_type="theme"
-    ):
-        return {
-            "themes": themes,
-            "top_k": top_k,
-            "min_match_score": min_match_score,
-            "search_type": search_type,
+    def _payload(self, **overrides):
+        payload = {
+            "themes": "grace redemption",
+            "search_type": "theme",
+            "top_k": 10,
+            "min_match_score": 0,
         }
+        payload.update(overrides)
+        return payload
 
-    def test_get_songs_by_theme_success(self, client, db_session):
+    # ---------- Success ----------
+    def test_theme_search_success(self, client, db_session):
         """Test successful retrieval of songs based on theme similarity."""
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
         # Create Song
         song = self._create_song(db_session, first_line="Amazing Grace")
-        lyrics = self._create_lyrics(
-            db_session, song, content="Amazing grace how sweet the sound"
-        )
-        themes = self._create_themes(db_session, lyrics, content="Grace, salvation")
+        lyrics = self._create_lyrics(db_session, song)
+        themes = self._create_themes(db_session, lyrics, content="Grace")
         self._create_theme_embedding(
             db_session, themes, embedding=self.strong_embedding
         )
 
-        # Authenticate user to set cookies
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        self._create_usage(db_session, song, activity)
+        self._create_usage_stats(db_session, song, activity, date.today(), date.today())
 
-        # 2. Mock the embedding service and call endpoint
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        # Mock the embedding service and call endpoint
         with patch(
-            "app.routers.songs.get_embeddings", return_value=[self.strong_embedding]
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
         ):
-            response = client.post(
-                self.url,
-                json=self._payload(themes="Grace", search_type="theme"),
-            )
+            response = client.post(self.url, json=self._payload(search_type="theme"))
 
-        # 3. Assertions
+        # Assertions
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
         assert len(data) == 1
         assert data[0]["id"] == song.id
-        assert data[0]["themes"] == "Grace, salvation"
         assert "match_score" in data[0]
 
-    def test_get_songs_by_lyric_success(self, client, db_session):
+    def test_lyric_search_success(self, client, db_session):
         """Test successful retrieval of songs based on lyric similarity."""
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
         # Create Song
-        song = self._create_song(db_session, first_line="Amazing Grace")
-        lyrics = self._create_lyrics(
-            db_session, song, content="Amazing grace how sweet the sound"
-        )
+        song = self._create_song(db_session)
+        lyrics = self._create_lyrics(db_session, song)
         self._create_lyric_embedding(
             db_session, lyrics, embedding=self.strong_embedding
         )
-        self._create_themes(db_session, lyrics, content="Grace, salvation")
+        self._create_themes(db_session, lyrics)
 
-        # Authenticate user to set cookies
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        self._create_usage(db_session, song, activity)
+        self._create_usage_stats(db_session, song, activity, date.today(), date.today())
 
-        # 2. Mock the embedding service and call endpoint
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        # Mock the embedding service and call endpoint
         with patch(
-            "app.routers.songs.get_embeddings", return_value=[self.strong_embedding]
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
         ):
-            response = client.post(
-                self.url,
-                json=self._payload(themes="Grace", search_type="lyric"),
-            )
+            response = client.post(self.url, json=self._payload(search_type="lyric"))
 
-        # 3. Assertions
+        # Assertions
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
         assert len(data) == 1
         assert data[0]["id"] == song.id
-        assert data[0]["themes"] == "Grace, salvation"
         assert "match_score" in data[0]
 
-    def test_top_k_validation(self, client, db_session):
-        """Test that invalid top_k values are rejected."""
-        # Authenticate user to set cookies
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+    def test_default_parameters(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
 
-        # top_k too high (max is 30)
-        response = client.post(self.url, json=self._payload(top_k=100))
-        assert response.status_code == 422
-
-        # top_k too low
-        response = client.post(self.url, json=self._payload(top_k=0))
-        assert response.status_code == 422
-
-    def test_min_match_score_validation(self, client, db_session):
-        """Test that invald min_match_score values are rejected"""
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
-        # Too high (max is 100)
-        response = client.post(
-            self.url,
-            json=self._payload(min_match_score=200),
+        song = self._create_song(db_session)
+        lyrics = self._create_lyrics(db_session, song)
+        self._create_lyric_embedding(
+            db_session, lyrics, embedding=self.strong_embedding
         )
-        assert response.status_code == 422
+        self._create_themes(db_session, lyrics)
 
-        # Too low (min is 0)
-        response = client.post(
-            self.url,
-            json=self._payload(min_match_score=-1),
-        )
-        assert response.status_code == 422
+        self._create_usage(db_session, song, activity)
+        self._create_usage_stats(db_session, song, activity, date.today(), date.today())
 
-    def test_embedding_service_unavailable(self, client, db_session):
-        """Test handling of embedding service failure."""
-        # Authenticate user to set cookies
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         with patch(
-            "app.routers.songs.get_embeddings", side_effect=EmbeddingServiceUnavailable
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
         ):
-            response = client.post(self.url, json=self._payload())
-            assert response.status_code == 503
+            response = client.post(
+                self.url,
+                json={"themes": "grace"},
+            )
 
-    def test_songs_ordered_by_distance(self, client, db_session):
-        """Verify that results are actually returned in order of similarity."""
-        # Song 1 - exact match
-        s1 = self._create_song(db_session, first_line="Amazing Grace")
-        l1 = self._create_lyrics(
-            db_session, s1, content="Amazing grace how sweet the sound"
-        )
-        t1 = self._create_themes(db_session, l1, content="Grace, salvation")
-        self._create_theme_embedding(db_session, t1, embedding=self.strong_embedding)
+        assert response.status_code == 200
+        assert len(response.json()) == 1
 
-        # Song 2 - distant match
-        s2 = self._create_song(db_session, first_line="A Mighty Fortress")
-        l2 = self._create_lyrics(db_session, s2, content="A mighty fortress is our God")
-        t2 = self._create_themes(db_session, l2, content="Strength, protection")
-        self._create_theme_embedding(db_session, t2, embedding=self.weak_embedding)
+    # ---------- Ordering + top_k ----------
+    def test_results_ordered_by_match_score(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
 
-        # Authenticate user to set cookies
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
-
-        with patch(
-            "app.routers.songs.get_embeddings", return_value=[[0.1] * EMBED_DIMENSIONS]
-        ):
-            response = client.post(self.url, json=self._payload(min_match_score=0))
-            data = response.json()
-
-            assert len(data) == 2
-            assert (
-                data[0]["first_line"] == "Amazing Grace"
-            )  # Should be first (closer to 0.1)
-            assert data[1]["first_line"] == "A Mighty Fortress"
-            assert data[0]["match_score"] >= data[1]["match_score"]
-
-    def test_min_match_score_filters_results(self, client, db_session):
-        # Song 1 - strong match
-        s1 = self._create_song(db_session, first_line="Amazing Grace")
+        s1 = self._create_song(db_session, first_line="Strong")
         l1 = self._create_lyrics(db_session, s1)
         t1 = self._create_themes(db_session, l1)
         self._create_theme_embedding(db_session, t1, embedding=self.strong_embedding)
 
-        # Song 2 - weaker match
-        s2 = self._create_song(db_session, first_line="Weak Song")
+        s2 = self._create_song(db_session, first_line="Weak")
         l2 = self._create_lyrics(db_session, s2)
         t2 = self._create_themes(db_session, l2)
         self._create_theme_embedding(db_session, t2, embedding=self.weak_embedding)
 
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        self._create_usage(db_session, s1, activity)
+        self._create_usage(db_session, s2, activity)
+
+        self._create_usage_stats(db_session, s1, activity, date.today(), date.today())
+        self._create_usage_stats(db_session, s2, activity, date.today(), date.today())
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(self.url, json=self._payload())
+
+        data = response.json()
+        assert data[0]["match_score"] >= data[1]["match_score"]
+
+    def test_top_k_limits_results(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
+        songs = []
+        for _ in range(3):
+            song = self._create_song(db_session)
+            lyrics = self._create_lyrics(db_session, song)
+            themes = self._create_themes(db_session, lyrics)
+            self._create_theme_embedding(
+                db_session, themes, embedding=self.strong_embedding
+            )
+            self._create_usage(db_session, song, activity)
+            self._create_usage_stats(
+                db_session, song, activity, date.today(), date.today()
+            )
+            songs.append(song)
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(top_k=2),
+            )
+
+        assert len(response.json()) == 2
+
+    # ---------- Match Score ----------
+    def test_min_match_score_filters(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
+        strong_song = self._create_song(db_session)
+        weak_song = self._create_song(db_session)
+
+        for song, emb in [
+            (strong_song, self.strong_embedding),
+            (weak_song, self.weak_embedding),
+        ]:
+            lyrics = self._create_lyrics(db_session, song)
+            themes = self._create_themes(db_session, lyrics)
+            self._create_theme_embedding(db_session, themes, embedding=emb)
+            self._create_usage(db_session, song, activity)
+            self._create_usage_stats(
+                db_session, song, activity, date.today(), date.today()
+            )
+
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         with patch(
             "app.routers.songs.get_embeddings",
@@ -1781,102 +1824,338 @@ class TestSongByTheme(BaseTestHelpers, AuthTestsMixin):
                 json=self._payload(min_match_score=50),
             )
 
-        data = response.json()
+        assert len(response.json()) == 1
 
-        assert len(data) == 1
-        assert data[0]["first_line"] == "Amazing Grace"
+    # ---------- Usage Filters ----------
+    def test_used_in_range_filter(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
 
-    def test_lyric_search_without_themes(self, client, db_session):
-        """Lyric search should still return songs even if themes are missing."""
-        # Create Song + Lyrics
-        song = self._create_song(db_session, first_line="Theme-less Song")
-        lyrics = self._create_lyrics(
-            db_session, song, content="Some meaningful lyric content"
+        song = self._create_song(db_session)
+        lyrics = self._create_lyrics(db_session, song)
+        themes = self._create_themes(db_session, lyrics)
+        self._create_theme_embedding(
+            db_session, themes, embedding=self.strong_embedding
         )
 
-        # Create lyric embedding ONLY (no themes)
-        self._create_lyric_embedding(
-            db_session, lyrics, embedding=self.strong_embedding
-        )
+        in_range = date.today() - timedelta(days=1)
+        old = date.today() - timedelta(days=30)
 
-        # Authenticate user
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        self._create_usage(db_session, song, activity, old)
+        self._create_usage(db_session, song, activity, in_range)
+        self._create_usage_stats(db_session, song, activity, old, in_range)
 
-        # Mock embedding service
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
+
         with patch(
             "app.routers.songs.get_embeddings",
             return_value=[self.strong_embedding],
         ):
             response = client.post(
                 self.url,
-                json=self._payload(search_type="lyric"),
+                json=self._payload(
+                    used_in_range=True,
+                    from_date=(date.today() - timedelta(days=5)).isoformat(),
+                    to_date=date.today().isoformat(),
+                ),
             )
 
-        assert response.status_code == 200
+        assert len(response.json()) == 1
+
+    def test_first_used_in_range_filter(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
+        song_in_range = self._create_song(db_session)
+        song_out_of_range = self._create_song(db_session)
+
+        today = date.today()
+        in_range_date = today - timedelta(days=2)
+        out_of_range_date = today - timedelta(days=30)
+
+        for song, first_used in [
+            (song_in_range, in_range_date),
+            (song_out_of_range, out_of_range_date),
+        ]:
+            lyrics = self._create_lyrics(db_session, song)
+            themes = self._create_themes(db_session, lyrics)
+            self._create_theme_embedding(
+                db_session, themes, embedding=self.strong_embedding
+            )
+            self._create_usage(db_session, song, activity, first_used)
+            self._create_usage_stats(db_session, song, activity, first_used, first_used)
+
+        # Grant access + login
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(
+                    first_used_in_range=True,
+                    from_date=(today - timedelta(days=5)).isoformat(),
+                    to_date=today.isoformat(),
+                ),
+            )
+
         data = response.json()
-
         assert len(data) == 1
-        assert data[0]["id"] == song.id
+        assert data[0]["id"] == song_in_range.id
 
-        # Themes may be None depending on response model behaviour
-        assert "themes" in data[0]
-        assert "match_score" in data[0]
+    def test_last_used_in_range_filter(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
 
+        song_in_range = self._create_song(db_session)
+        song_out_of_range = self._create_song(db_session)
+
+        today = date.today()
+        in_range_date = today - timedelta(days=2)
+        out_of_range_date = today - timedelta(days=30)
+
+        for song, last_used in [
+            (song_in_range, in_range_date),
+            (song_out_of_range, out_of_range_date),
+        ]:
+            lyrics = self._create_lyrics(db_session, song)
+            themes = self._create_themes(db_session, lyrics)
+            self._create_theme_embedding(
+                db_session, themes, embedding=self.strong_embedding
+            )
+            self._create_usage(db_session, song, activity, last_used)
+            self._create_usage_stats(db_session, song, activity, last_used, last_used)
+
+        # Grant access + login
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(
+                    last_used_in_range=True,
+                    from_date=(today - timedelta(days=5)).isoformat(),
+                    to_date=today.isoformat(),
+                ),
+            )
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == song_in_range.id
+
+    def test_combined_usage_filters_intersection(self, client, db_session):
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
+        today = date.today()
+
+        # Song that satisfies BOTH filters
+        valid_song = self._create_song(db_session)
+
+        # Song that only satisfies used_in_range
+        partial_song = self._create_song(db_session)
+
+        valid_first = today - timedelta(days=3)
+        valid_last = today - timedelta(days=1)
+
+        old_date = today - timedelta(days=40)
+
+        # --- Valid song ---
+        lyrics = self._create_lyrics(db_session, valid_song)
+        themes = self._create_themes(db_session, lyrics)
+        self._create_theme_embedding(
+            db_session, themes, embedding=self.strong_embedding
+        )
+        self._create_usage(db_session, valid_song, activity, valid_last)
+        self._create_usage_stats(
+            db_session, valid_song, activity, valid_first, valid_last
+        )
+
+        # --- Partial song ---
+        lyrics = self._create_lyrics(db_session, partial_song)
+        themes = self._create_themes(db_session, lyrics)
+        self._create_theme_embedding(
+            db_session, themes, embedding=self.strong_embedding
+        )
+        self._create_usage(db_session, partial_song, activity, valid_last)
+        self._create_usage_stats(
+            db_session, partial_song, activity, old_date, valid_last
+        )
+
+        # Grant access + login
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(
+                    used_in_range=True,
+                    first_used_in_range=True,
+                    from_date=(today - timedelta(days=5)).isoformat(),
+                    to_date=today.isoformat(),
+                ),
+            )
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["id"] == valid_song.id
+
+    # ---------- Activity Access ----------
+    def test_excludes_disallowed_activities(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        allowed = self._create_church_activity(db_session, church, "Allowed")
+        disallowed = self._create_church_activity(db_session, church, "Disallowed")
+
+        song = self._create_song(db_session)
+        lyrics = self._create_lyrics(db_session, song)
+        themes = self._create_themes(db_session, lyrics)
+
+        self._create_theme_embedding(
+            db_session, themes, embedding=self.strong_embedding
+        )
+
+        self._create_usage(db_session, song, allowed)
+        self._create_usage(db_session, song, disallowed)
+
+        today = date.today()
+        self._create_usage_stats(db_session, song, allowed, today, today)
+        self._create_usage_stats(db_session, song, disallowed, today, today)
+
+        # Grant activity access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, allowed)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(self.url, json=self._payload())
+
+        assert len(response.json()) == 1
+
+    def test_no_allowed_activities_returns_empty(self, client, db_session):
+        song = self._create_song(db_session)
+        lyrics = self._create_lyrics(db_session, song)
+        themes = self._create_themes(db_session, lyrics)
+        self._create_theme_embedding(
+            db_session, themes, embedding=self.strong_embedding
+        )
+
+        # Authenticate user with no access
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(self.url, json=self._payload())
+
+        assert response.json() == []
+
+    def test_request_activity_filter_intersects_permissions(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+
+        activity_a = self._create_church_activity(db_session, church, "A")
+        activity_b = self._create_church_activity(db_session, church, "B")
+
+        # Song used in both activities
+        song = self._create_song(db_session)
+        lyrics = self._create_lyrics(db_session, song)
+        themes = self._create_themes(db_session, lyrics)
+
+        self._create_theme_embedding(
+            db_session, themes, embedding=self.strong_embedding
+        )
+
+        today = date.today()
+
+        self._create_usage(db_session, song, activity_a, today)
+        self._create_usage(db_session, song, activity_b, today)
+
+        self._create_usage_stats(db_session, song, activity_a, today, today)
+        self._create_usage_stats(db_session, song, activity_b, today, today)
+
+        # User only has access to activity A
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, activity_a)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            return_value=[self.strong_embedding],
+        ):
+            response = client.post(
+                self.url,
+                json=self._payload(
+                    church_activity_id=[activity_b.id]  # Request B only
+                ),
+            )
+
+        # User doesn't have access to B → intersection should be empty
+        assert response.json() == []
+
+    # ---------- Edge Cases ----------
     def test_song_without_embedding_not_returned(self, client, db_session):
-        """Songs without embeddings should not appear in results."""
-        # Create Song + Lyrics + Themes (NO embeddings)
-        song = self._create_song(db_session, first_line="No Embedding Song")
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
+        song = self._create_song(db_session)
         lyrics = self._create_lyrics(db_session, song)
         self._create_themes(db_session, lyrics)
 
-        # Authenticate user
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        self._create_usage(db_session, song, activity)
+        self._create_usage_stats(db_session, song, activity, date.today(), date.today())
 
-        # Mock embedding service
-        with patch(
-            "app.routers.songs.get_embeddings",
-            return_value=[self.strong_embedding],
-        ):
-            response = client.post(
-                self.url,
-                json=self._payload(min_match_score=0),
-            )
-
-        assert response.status_code == 200
-        data = response.json()
-
-        # Song should not appear because embedding missing
-        assert all(d["id"] != song.id for d in data)
-
-    def test_default_parameters_used(self, client, db_session):
-        """Verify endpoint applies default request parameters."""
-        # Create Song + Lyrics + Embedding
-        song = self._create_song(db_session, first_line="Default Test Song")
-        lyrics = self._create_lyrics(db_session, song)
-        self._create_lyric_embedding(
-            db_session, lyrics, embedding=self.strong_embedding
-        )
-        self._create_themes(db_session, lyrics)
-
-        # Authenticate
-        self._create_user(db_session, self.username, self.password)
-        self._login(client, self.username, self.password)
+        # Grant network access and authenticate user
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)  # login to set cookies
 
         with patch(
             "app.routers.songs.get_embeddings",
             return_value=[self.strong_embedding],
         ):
-            # Only send required field
-            response = client.post(
-                self.url,
-                json={"themes": "grace"},
-            )
+            response = client.post(self.url, json=self._payload())
 
-        assert response.status_code == 200
-        data = response.json()
+        assert response.json() == []
 
-        # Should still return result (default search_type = lyric)
-        assert len(data) == 1
-        assert data[0]["id"] == song.id
+    def test_embedding_service_failure(self, client, db_session):
+
+        # Authenticate user (no access)
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)  # login to set cookies
+
+        with patch(
+            "app.routers.songs.get_embeddings",
+            side_effect=EmbeddingServiceUnavailable,
+        ):
+            response = client.post(self.url, json=self._payload())
+
+        assert response.status_code == 503

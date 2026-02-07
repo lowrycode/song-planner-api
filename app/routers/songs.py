@@ -428,11 +428,47 @@ def get_songs_by_theme(
     req: SongThemeSearchRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
+    # Get embedding for text input
     try:
         input_embedding = get_embeddings([req.themes])[0]
     except EmbeddingServiceUnavailable:
         raise HTTPException(status_code=503)
+
+    # Activities Filter
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=req.church_activity_id,
+    )
+    if not effective_activity_ids:
+        return []
+
+    # Usage Filters
+    usage_filters = build_song_usage_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=req.from_date,
+        to_date=req.to_date,
+    )
+
+    # Usage Stats Filters
+    usage_stats_filters = build_song_usage_stats_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=req.from_date,
+        to_date=req.to_date,
+        first_used_in_range=req.first_used_in_range,
+        last_used_in_range=req.last_used_in_range,
+    )
+
+    # Song IDs subquery filtered by usages
+    eligible_song_ids_from_usage = resolve_usage_filtered_song_ids(
+        db=db,
+        first_used_in_range=req.first_used_in_range,
+        last_used_in_range=req.last_used_in_range,
+        used_in_range=req.used_in_range,
+        usage_filters=usage_filters,
+        usage_stats_filters=usage_stats_filters,
+    )
 
     if req.search_type == "lyric":
         embedding_model = SongLyricEmbeddings
@@ -467,6 +503,11 @@ def get_songs_by_theme(
     match_score = match_expr.label("match_score")
 
     stmt = base_query.add_columns(match_score)
+
+    if eligible_song_ids_from_usage is not None:
+        stmt = stmt.where(
+            Song.id.in_(select(eligible_song_ids_from_usage))
+        )
 
     if req.min_match_score is not None:
         stmt = stmt.where(match_expr >= req.min_match_score)

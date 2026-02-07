@@ -17,6 +17,12 @@ class UsageContextFilters(BaseModel):
     church_activity_id: set[int] | None = None
 
 
+class UsageMatchFilters(UsageContextFilters):
+    last_used_in_range: bool = False
+    first_used_in_range: bool = False
+    used_in_range: bool = False
+
+
 class SongLyricsSchema(BaseModel):
     content: str
     model_config = ConfigDict(from_attributes=True)
@@ -85,13 +91,17 @@ class SongCountByActivityFilters(UsageContextFilters):
     pass
 
 
-class SongListUsageFilters(UsageContextFilters):
+class SongListUsageFilters(UsageMatchFilters):
     song_key: str | None = None
     song_type: SongType | None = None
     lyric: str | None = None
-    last_used_in_range: bool = False
-    first_used_in_range: bool = False
-    used_in_range: bool = False
+
+
+class SongThemeSearchRequest(UsageMatchFilters):
+    themes: str
+    top_k: int = Field(default=20, ge=1, le=30)
+    min_match_score: float | None = Field(default=75, ge=0, le=100)
+    search_type: Literal["lyric", "theme"] = "lyric"
 
 
 # Response Schemas
@@ -140,13 +150,6 @@ class SongCountByActivityResponse(BaseModel):
     church_activity_name: str
     total_count: int
     unique_count: int
-
-
-class SongThemeSearchRequest(BaseModel):
-    themes: str
-    top_k: int = Field(default=20, ge=1, le=30)
-    min_match_score: float | None = Field(default=75, ge=0, le=100)
-    search_type: Literal["lyric", "theme"] = "lyric"
 
 
 class SongThemeSearchResponse(SongBasicDetails):
