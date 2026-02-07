@@ -23,6 +23,13 @@ from app.models import (
 
 
 @dataclass
+class SingleScope:
+    network: Network
+    church: Church
+    activity: ChurchActivity
+
+
+@dataclass
 class MultiScope:
     network1: Network
     network2: Network
@@ -255,6 +262,17 @@ class BaseTestHelpers:
         db_session.commit()
         db_session.refresh(church_activity_access)
         return church_activity_access
+
+    def _create_single_network_church_and_activity(self, db_session) -> SingleScope:
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+
+        return SingleScope(
+            network,
+            church,
+            activity,
+        )
 
     def _create_multi_network_churches_and_activities(self, db_session) -> MultiScope:
         network1 = self._create_network(db_session, name="Network 1")
