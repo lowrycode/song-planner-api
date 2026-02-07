@@ -125,6 +125,7 @@ class SongFullDetails(BaseModel):
     copyright: str | None = None
     author: str | None = None
     duration: int | None = None
+    themes: str | None = None
     lyrics: SongLyricsSchema
     resources: SongResourcesSchema
     model_config = ConfigDict(from_attributes=True)

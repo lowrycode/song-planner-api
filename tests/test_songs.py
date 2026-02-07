@@ -871,7 +871,11 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
 
         # Create song with lyrics and resources (one-to-one)
         song = self._create_song(db_session)
-        self._create_lyrics(db_session, song, content="Test lyrics")
+        lyrics = self._create_lyrics(db_session, song, content="Test lyrics")
+
+        # Create themes linked to the lyrics
+        themes = self._create_themes(db_session, lyrics)
+
         resources = self._create_resources(db_session, song)
         db_session.add(resources)
         db_session.commit()
@@ -890,6 +894,10 @@ class TestSongFullDetails(BaseTestHelpers, AuthTestsMixin):
         assert "harmony_vid" in data["resources"]
         assert "harmony_pdf" in data["resources"]
         assert "harmony_ms" in data["resources"]
+
+        # New assertion for themes
+        assert "themes" in data
+        assert data["themes"] == themes.content
 
     def test_get_song_full_details_not_found(self, client, db_session):
         # Setup user and login

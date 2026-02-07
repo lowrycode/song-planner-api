@@ -363,7 +363,7 @@ def song_full_details(
     song = (
         db.query(Song)
         .options(
-            joinedload(Song.lyrics),
+            joinedload(Song.lyrics).joinedload(SongLyrics.themes),
             joinedload(Song.resources),
         )
         .filter(Song.id == song_id)
@@ -372,6 +372,12 @@ def song_full_details(
 
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
+
+    # Inject theme content as 'themes' attribute for Pydantic schema
+    if song.lyrics and song.lyrics.themes:
+        setattr(song, "themes", song.lyrics.themes.content)
+    else:
+        setattr(song, "themes", None)
 
     return song
 
