@@ -71,6 +71,7 @@ Emotional tone: 2 to 4 adjectives or short phrases, comma-separated on a single 
 Theological ideas: 2 to 4 concrete theological concepts, comma-separated on a single
 line
 
+Write each category label.
 Do not use bullet points or line breaks within each category.
 Do not write full sentences. Avoid speculation.
 
