@@ -16,5 +16,6 @@ gunicorn
 # for semantic search
 pgvector
 google-genai
-# for tests
+# for tests and async API requests
 httpx
+pytest-httpx
