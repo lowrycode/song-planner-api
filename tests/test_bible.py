@@ -1,8 +1,11 @@
 import re
 import pytest
 import httpx
+from unittest.mock import patch
+from fastapi import status
 from tests.helpers import BaseTestHelpers, AuthTestsMixin
 from app.settings import settings
+from app.utils.rag import ExternalServiceError
 
 
 class TestBiblePassage(BaseTestHelpers, AuthTestsMixin):
@@ -106,3 +109,91 @@ class TestBiblePassage(BaseTestHelpers, AuthTestsMixin):
         response = client.get(self._get_url("Fake 1:1"))
         assert response.status_code == 404
         assert response.json()["detail"] == "Passage not found"
+
+
+class TestGenerateBibleThemes(BaseTestHelpers, AuthTestsMixin):
+    url = "/bible/themes"
+    http_method = "post"
+
+    def _payload(self, **overrides):
+        payload = {
+            "text": "For God so loved the world",
+        }
+        payload.update(overrides)
+        return payload
+
+    # ---------- Success ----------
+    def test_generate_themes_success(self, client, db_session):
+        """Test successful theme generation."""
+
+        # Authenticate user
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        mock_output = (
+            "Love, Salvation, Grace\n" "Hopeful, Comforting\n" "Atonement, Redemption"
+        )
+
+        with patch(
+            "app.routers.bible.generate_themes_from_bible_text",
+            return_value=mock_output,
+        ):
+            response = client.post(self.url, json=self._payload())
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "themes" in data
+        assert data["themes"] == mock_output
+
+    # ---------- Trimming ----------
+    def test_trims_input_text(self, client, db_session):
+        """Ensure whitespace is stripped before service call."""
+
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.bible.generate_themes_from_bible_text",
+            return_value="Mock Themes",
+        ) as mock_service:
+
+            client.post(
+                self.url,
+                json={"text": "   Psalm 23 text   "},
+            )
+
+            mock_service.assert_called_once_with("Psalm 23 text")
+
+    # ---------- Validation ----------
+    def test_missing_text_field(self, client, db_session):
+        """Missing body field should return 422."""
+
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        response = client.post(self.url, json={})
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    def test_empty_text(self, client, db_session):
+        """Empty text should return 422"""
+
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        response = client.post(self.url, json={"text": "   "})
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # ---------- Service Failure ----------
+    def test_service_failure_returns_502(self, client, db_session):
+        """Gemini/service errors should bubble to 502."""
+
+        self._create_user(db_session, self.username, self.password)
+        self._login(client, self.username, self.password)
+
+        with patch(
+            "app.routers.bible.generate_themes_from_bible_text",
+            side_effect=ExternalServiceError("Gemini failed"),
+        ):
+            response = client.post(self.url, json=self._payload())
+
+        assert response.status_code == 502

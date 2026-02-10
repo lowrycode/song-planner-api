@@ -32,7 +32,7 @@ from app.schemas.songs import (
     SongThemeSearchResponse,
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
-from app.utils.rag import get_embeddings, EmbeddingServiceUnavailable
+from app.utils.rag import get_embeddings, ExternalServiceError
 from app.utils.songs import (
     get_effective_activity_ids,
     build_song_usage_filters,
@@ -439,7 +439,7 @@ def get_songs_by_theme(
     # Get embedding for text input
     try:
         input_embedding = get_embeddings([req.themes])[0]
-    except EmbeddingServiceUnavailable:
+    except ExternalServiceError:
         raise HTTPException(status_code=503)
 
     # Activities Filter

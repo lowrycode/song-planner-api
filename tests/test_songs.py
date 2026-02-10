@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from urllib.parse import urlencode
 from unittest.mock import patch
 from tests.helpers import BaseTestHelpers, AuthTestsMixin
-from app.utils.rag import EmbeddingServiceUnavailable
+from app.utils.rag import ExternalServiceError
 
 
 EMBED_DIMENSIONS = int(os.getenv("EMBED_DIMENSIONS"))
@@ -2162,7 +2162,7 @@ class TestSongsByTheme(BaseTestHelpers, AuthTestsMixin):
 
         with patch(
             "app.routers.songs.get_embeddings",
-            side_effect=EmbeddingServiceUnavailable,
+            side_effect=ExternalServiceError,
         ):
             response = client.post(self.url, json=self._payload())
 

@@ -3,9 +3,16 @@ import httpx
 from typing import Annotated
 from fastapi import APIRouter, Depends, Query, HTTPException
 from app.dependencies import require_min_role
-from app.schemas.bible import BiblePassageRequest, BiblePassageResponse
+from app.schemas.bible import (
+    BiblePassageRequest,
+    BiblePassageResponse,
+    GenerateThemesRequest,
+    GenerateThemesResponse,
+)
 from app.models import UserRole, User
 from app.settings import settings
+from app.utils.rag import generate_themes_from_bible_text, ExternalServiceError
+
 
 router = APIRouter()
 
@@ -35,9 +42,7 @@ async def bible_passage(
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
-                settings.API_BIBLE_URL,
-                params=params,
-                headers=headers
+                settings.API_BIBLE_URL, params=params, headers=headers
             )
     except httpx.RequestError:
         raise HTTPException(status_code=502, detail="Bible service unavailable")
@@ -57,3 +62,22 @@ async def bible_passage(
     text = re.sub(r"\s+", " ", raw_text).strip()
 
     return BiblePassageResponse(text=text)
+
+
+@router.post(
+    "/themes",
+    response_model=GenerateThemesResponse,
+    tags=["bible"],
+    summary="Generate themes from Bible text",
+)
+def generate_bible_themes(
+    body: GenerateThemesRequest,
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+    try:
+        themes = generate_themes_from_bible_text(body.text)
+    except ExternalServiceError as exc:
+        # Upstream failure → 502 Bad Gateway
+        raise HTTPException(status_code=502, detail="Theme generation failed") from exc
+
+    return GenerateThemesResponse(themes=themes)
