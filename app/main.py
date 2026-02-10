@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from app.exceptions import validation_exception_handler
-from app.routers import auth, songs, activities, networks, users
+from app.routers import auth, bible, songs, activities, networks, users
 
 
 def get_allowed_origins() -> list[str]:
@@ -41,6 +41,7 @@ def root():
 
 app.include_router(activities.router, prefix="/activities")
 app.include_router(auth.router, prefix="/auth")
+app.include_router(bible.router, prefix="/bible")
 app.include_router(networks.router, prefix="/networks")
 app.include_router(songs.router, prefix="/songs")
 app.include_router(users.router, prefix="/users")
