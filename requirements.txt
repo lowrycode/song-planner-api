@@ -9,7 +9,7 @@ python-dotenv
 python-multipart
 pyjwt
 pydantic-settings
-psycopg2
+psycopg2-binary
 argon2-cffi
 alembic
 gunicorn
