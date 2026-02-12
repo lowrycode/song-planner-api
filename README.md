@@ -1,6 +1,8 @@
 # Song Planner Dashboard — Backend API
 
-A secure **REST API** powering the **Song Planner Dashboard**, responsible for authentication, authorisation, data aggregation, and analytics over song usage data across a network of churches.
+A secure **REST API** powering the **Song Planner Dashboard**. It handles authentication, authorisation, song usage analytics, and data aggregation across a network of churches.
+
+The API also integrates **third-party LLM services** to generate thematic summaries for songs and Bible passages, and implements a **Retrieval-Augmented Generation (RAG)** pipeline using vector embeddings to enable semantic song search.
 
 ## Related repository:  
 
@@ -14,21 +16,26 @@ This backend provides the core business logic and data access layer for the Song
 - Networks, churches, and activities
 - Songs, lyrics, and related resources
 - Song usage records and aggregated usage statistics
+- Semantic search infrastructure and AI-assisted content analysis
 
 A key design goal of the API is to **enforce access control and data restrictions server-side**, ensuring users can only query data they are explicitly permitted to see.
 
 ## Tech Stack
 
 - **FastAPI**: High-performance REST API framework
+- **Pydantic / pydantic-settings**: Request validation and configuration
 - **SQLAlchemy ORM**: Database access and query composition
 - **PostgreSQL**: Primary relational database
-- **Pydantic / pydantic-settings**: Request validation and configuration
+- **pgvector**: PostgreSQL extension enabling vector similarity searches
+- **Alembic**: Database migrations (used earlier in development; schema later reset)
+- **Gemini Models**: Theme summarisation and embedding generation
+- **External Bible API**: Retrieval of scripture text for thematic analysis
 - **JWT (python-jose / pyjwt)**: Authentication tokens
 - **Argon2 + bcrypt**: Secure password hashing
-- **Alembic**: Database migrations (used earlier in development; schema later reset)
-- **Gunicorn**: Production application server
-- **Render**: Backend hosting
 - **pytest + httpx**: Test-driven development and API testing
+- **Gunicorn**: Production application server
+- **Google Cloud Run**: Backend hosting
+- **Render**: Backend hosting (in development)
 
 ## Authentication & Authorisation
 
@@ -40,10 +47,8 @@ A key design goal of the API is to **enforce access control and data restriction
 - Tokens are sent via **HTTP-only cookies** for improved security.
 - Refresh tokens **rotate on use**, and can be revoked explicitly.
 
-This approach:
-- Reduces exposure to XSS attacks
-- Allows server-side session invalidation
-- Aligns with modern browser security constraints
+This approach improves security by reducing XSS exposure, enabling server-side session invalidation, and aligning with modern browser cookie constraints.
+
 
 ### Authorisation
 
@@ -84,6 +89,8 @@ Core domain entities include:
 - **SongUsage:** Individual usage events
 - **SongUsageStats:** Pre-aggregated first/last usage per activity
 - **SongLyrics / SongResources:** Extended song content
+- **SongThemes:** Generated from lyrics using LLM
+- **SongLyricEmbeddings / SongThemeEmbeddings:** Vector representations of lyrics and themes used for semantic similarity search.
 
 A dedicated `SongUsageStats` table is used to:
 - Optimise analytics queries
@@ -103,9 +110,44 @@ Key characteristics:
 
 Complex analytics logic is intentionally handled in the backend, keeping the frontend lightweight and focused on presentation.
 
+## AI-Powered Semantic Search & Content Analysis
+
+The backend implements **Retrieval-Augmented Generation (RAG)** to enable semantic song discovery and automated thematic analysis.
+
+### Semantic Song Search
+
+Semantic search allows songs to be retrieved based on lyrical meaning or thematic similarity rather than exact keyword matches.
+
+This is achieved by:
+- Generating theme summaries for songs using large language models
+- Generating vector embeddings for:
+  - Song lyrics
+  - Generated song theme summaries
+- Storing embeddings using the PostgreSQL pgvector extension
+- Performing similarity searches using vector distance queries
+
+This allows users to discover songs based on conceptual similarity, rather than keyword matches.
+
+### Bible Passage Theme Extraction
+
+The API integrates with an external Bible API to retrieve passage text. The retrieved content is processed using generative AI models to:
+- Extract thematic summaries from Bible passages
+- Generate embeddings for those summaries
+- Enable similarity matching between Bible themes and song themes
+
+This allows users to identify songs aligned with specific scriptural themes.
+
+### AI Models
+
+The system uses Gemini models for:
+- Theme summarisation
+- Embedding generation
+
+AI processing is performed server-side to maintain consistency, auditability, permission enforcement, and to ensure third-party API credentials remain secure and are never exposed to the client.
+
 ## Testing Strategy
 
-The backend was developed using **test-driven development (TDD)** principles.
+Many of the endpoints were developed using **test-driven development (TDD)** principles.
 - **pytest** is used as the test framework
 - **httpx** is used for API-level request testing
 
@@ -118,14 +160,27 @@ This approach helped validate complex access rules early in development.
 
 ## Environment & Configuration
 
-Configuration is managed via environment variables.
+Configuration is managed via environment variables. During local development, these are typically stored in a `.env` file which should not be committed to the repository.
 
 ```bash
+# Database
 DB_URL=<database_url>
 TEST_DB_URL=<test_database_url>
+
+# Security
 SECRET_KEY=<used_for_tokens>
-IS_DEV=True
+IS_DEV=True  # Adjusts HTTP-only cookie security and SameSite behaviour
 CORS_ALLOW_ORIGINS=http://localhost:5173,http://localhost:4173
+
+# Google Gemini Models
+GEMINI_API_KEY=<google_api_key>
+EMBED_MODEL=gemini-embedding-001
+EMBED_DIMENSIONS=768
+GEN_SUMMARY_MODEL=gemini-2.5-flash-lite
+
+# Bible API
+API_BIBLE_URL=<bible_api_url>
+API_BIBLE_TOKEN=<bible_api_key>
 ```
 
 No secrets are committed to the repository.
@@ -147,8 +202,17 @@ uvicorn app.main:app --reload
 
 **Recommended:** Python 3.12
 
-A PostgreSQL database is required for local development. This could be installed locally (I used a Docker image) or deployed in the cloud (e.g. Neon).
+A PostgreSQL database is required for local development. This could be installed locally or deployed in the cloud (e.g. Neon).
+
+The database requires the `pgvector` extension to support semantic search embeddings. During local development, I used a PostgreSQL Docker container with pgvector pre-installed.
+
+If using a different PostgreSQL instance, run the following SQL to enable the extension:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
 
 ## Planned Improvements
 
-- Semantic and thematic song search (LLM-assisted)
+- Introduce Redis caching for frequently requested analytics queries, AI-generated summaries, and external Bible API responses
