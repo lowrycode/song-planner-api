@@ -65,7 +65,7 @@ def list_songs(
         lyric=filter_query.lyric,
     )
 
-    query = db.query(Song).filter(*song_filters).order_by(Song.first_line.asc())
+    query = db.query(Song).filter(*song_filters).order_by(func.lower(Song.first_line))
     return query.all()
 
 
@@ -285,6 +285,9 @@ def list_songs_with_usage_summary(
     # Filter further (using song_ids after all usage filters are resolved)
     if eligible_song_ids_from_usage is not None:
         query = query.filter(Song.id.in_(select(eligible_song_ids_from_usage)))
+
+    # Sort alphabetical
+    query = query.order_by(func.lower(Song.first_line))
 
     # Query DB
     rows = query.all()
