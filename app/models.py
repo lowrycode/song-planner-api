@@ -10,8 +10,10 @@ from sqlalchemy import (
     Text,
     Index,
     UniqueConstraint,
+    CheckConstraint,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.expression import false
 from datetime import datetime, timezone
 from pgvector.sqlalchemy import Vector
 from app.database import Base
@@ -202,6 +204,11 @@ class SongUsage(Base):
     # Relationships
     song = relationship("Song", back_populates="usages")
     church_activity = relationship("ChurchActivity", back_populates="song_usages")
+    youtube_links = relationship(
+        "SongYouTubeLink",
+        back_populates="song_usage",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("idx_songusage_song_id", "song_id"),
@@ -374,10 +381,7 @@ class SongThemes(Base):
     )
 
     def __repr__(self):
-        return (
-            f"<SongThemes (id={self.id}, "
-            f"song_lyrics_id={self.song_lyrics_id})>"
-        )
+        return f"<SongThemes (id={self.id}, " f"song_lyrics_id={self.song_lyrics_id})>"
 
 
 class SongThemeEmbeddings(Base):
@@ -426,6 +430,56 @@ class SongResources(Base):
             f"<SongResources(id={self.id}, song_id={self.song_id}, "
             f"sheet_music='{self.sheet_music}', harmony_vid='{self.harmony_vid}', "
             f"harmony_pdf='{self.harmony_pdf}', harmony_ms='{self.harmony_ms}')>"
+        )
+
+
+class SongYouTubeLink(Base):
+    __tablename__ = "song_youtube_links"
+
+    id = Column(Integer, primary_key=True)
+
+    song_usage_id = Column(
+        Integer,
+        ForeignKey("song_usage.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    url = Column(String(500), nullable=False)
+
+    start_seconds = Column(Integer, nullable=True)
+    end_seconds = Column(Integer, nullable=True)
+
+    is_featured = Column(Boolean, nullable=False, default=False, server_default=false())
+    description = Column(String(255), nullable=True)
+
+    # Relationship
+    song_usage = relationship("SongUsage", back_populates="youtube_links")
+
+    __table_args__ = (
+        Index("idx_youtube_song_usage", "song_usage_id"),
+        CheckConstraint(
+            (
+                "start_seconds IS NULL OR "
+                "end_seconds IS NULL OR "
+                "start_seconds < end_seconds"
+            ),
+            name="check_start_before_end",
+        ),
+        CheckConstraint(
+            "start_seconds IS NULL OR start_seconds >= 0",
+            name="check_start_non_negative",
+        ),
+        CheckConstraint(
+            "end_seconds IS NULL OR end_seconds >= 0",
+            name="check_end_non_negative",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<SongYouTubeLink(id={self.id}, "
+            f"song_usage_id={self.song_usage_id}, "
+            f"url='{self.url}')>"
         )
 
 
