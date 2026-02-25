@@ -437,20 +437,18 @@ class SongYouTubeLink(Base):
     __tablename__ = "song_youtube_links"
 
     id = Column(Integer, primary_key=True)
-
     song_usage_id = Column(
         Integer,
         ForeignKey("song_usage.id", ondelete="CASCADE"),
         nullable=False,
     )
-
     url = Column(String(500), nullable=False)
-
     start_seconds = Column(Integer, nullable=True)
     end_seconds = Column(Integer, nullable=True)
-
     is_featured = Column(Boolean, nullable=False, default=False, server_default=false())
+    title = Column(String(255), nullable=False)
     description = Column(String(255), nullable=True)
+    thumbnail_key = Column(String(255), nullable=True)
 
     # Relationship
     song_usage = relationship("SongUsage", back_populates="youtube_links")
