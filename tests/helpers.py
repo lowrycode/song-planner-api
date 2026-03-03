@@ -19,6 +19,7 @@ from app.models import (
     UserNetworkAccess,
     UserChurchAccess,
     UserChurchActivityAccess,
+    SongYouTubeLink,
 )
 
 
@@ -197,6 +198,33 @@ class BaseTestHelpers:
         db_session.commit()
         db_session.refresh(stats)
         return stats
+
+    def _create_youtube_link(
+        self,
+        db_session,
+        usage,
+        url="https://youtube.com/test",
+        title="Test Video",
+        start_seconds=None,
+        end_seconds=None,
+        is_featured=False,
+        description=None,
+        thumbnail_key=None,
+    ):
+        link = SongYouTubeLink(
+            song_usage_id=usage.id,
+            url=url,
+            title=title,
+            start_seconds=start_seconds,
+            end_seconds=end_seconds,
+            is_featured=is_featured,
+            description=description,
+            thumbnail_key=thumbnail_key,
+        )
+        db_session.add(link)
+        db_session.commit()
+        db_session.refresh(link)
+        return link
 
     def _create_network(self, db_session, name="Test Network", slug=None):
         if slug is None:

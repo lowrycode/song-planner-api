@@ -52,6 +52,18 @@ class SongResourcesSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SongYouTubeLinkSchema(BaseModel):
+    id: int
+    url: str
+    start_seconds: int | None
+    end_seconds: int | None
+    is_featured: bool
+    title: str
+    description: str | None
+    thumbnail_key: str | None
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ActivityUsageStats(BaseModel):
     id: int
     name: str
@@ -102,6 +114,11 @@ class SongThemeSearchRequest(UsageMatchFilters):
     top_k: int = Field(default=20, ge=1, le=30)
     min_match_score: float | None = Field(default=75, ge=0, le=100)
     search_type: Literal["lyric", "theme"] = "lyric"
+
+
+class SongYouTubeLinkFilters(UsageContextFilters):
+    song_id: int | None = None
+    is_featured: bool | None = None
 
 
 # Response Schemas
@@ -156,3 +173,9 @@ class SongCountByActivityResponse(BaseModel):
 class SongThemeSearchResponse(SongBasicDetails):
     themes: str | None
     match_score: float
+
+
+class SongYouTubeLinkWithUsageResponse(SongYouTubeLinkSchema):
+    usage_id: int
+    used_date: date
+    church_activity_id: int

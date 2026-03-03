@@ -14,6 +14,7 @@ from app.models import (
     UserRole,
     User,
     ChurchActivity,
+    SongYouTubeLink,
 )
 from app.schemas.songs import (
     SongListFilters,
@@ -30,6 +31,8 @@ from app.schemas.songs import (
     SongTypeResponse,
     SongThemeSearchRequest,
     SongThemeSearchResponse,
+    SongYouTubeLinkFilters,
+    SongYouTubeLinkWithUsageResponse,
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
 from app.utils.rag import get_embeddings, ExternalServiceError
@@ -170,6 +173,68 @@ def song_type_overview(
         counts[key] = count
 
     return counts
+
+
+@router.get(
+    "/youtube-links",
+    status_code=200,
+    response_model=list[SongYouTubeLinkWithUsageResponse],
+    tags=["songs"],
+    summary="(user:activity) Retrieve song usage YouTube links",
+)
+def get_song_youtube_links(
+    filters: Annotated[SongYouTubeLinkFilters, Query()],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
+):
+    # Resolve effective activity IDs
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filters.church_activity_id,
+    )
+
+    if not effective_activity_ids:
+        return []
+
+    # Base query
+    query = (
+        db.query(SongYouTubeLink)
+        .join(SongYouTubeLink.song_usage)
+        .filter(SongUsage.church_activity_id.in_(effective_activity_ids))
+    )
+
+    # Optional filters
+    if filters.song_id is not None:
+        query = query.filter(SongUsage.song_id == filters.song_id)
+
+    if filters.from_date is not None:
+        query = query.filter(SongUsage.used_date >= filters.from_date)
+
+    if filters.to_date is not None:
+        query = query.filter(SongUsage.used_date <= filters.to_date)
+
+    if filters.is_featured is not None:
+        query = query.filter(SongYouTubeLink.is_featured == filters.is_featured)
+
+    links = query.all()
+
+    return [
+        SongYouTubeLinkWithUsageResponse(
+            id=link.id,
+            url=link.url,
+            start_seconds=link.start_seconds,
+            end_seconds=link.end_seconds,
+            is_featured=link.is_featured,
+            title=link.title,
+            description=link.description,
+            thumbnail_key=link.thumbnail_key,
+            usage_id=link.song_usage_id,
+            used_date=link.song_usage.used_date,
+            church_activity_id=link.song_usage.church_activity_id,
+        )
+        for link in links
+    ]
 
 
 @router.get(
@@ -419,9 +484,7 @@ def song_usages(
     )
 
     query = (
-        db.query(SongUsage)
-        .filter(SongUsage.song_id == song_id)
-        .filter(*usage_filters)
+        db.query(SongUsage).filter(SongUsage.song_id == song_id).filter(*usage_filters)
     )
 
     return query.all()
@@ -514,9 +577,7 @@ def get_songs_by_theme(
     stmt = base_query.add_columns(match_score)
 
     if eligible_song_ids_from_usage is not None:
-        stmt = stmt.where(
-            Song.id.in_(select(eligible_song_ids_from_usage))
-        )
+        stmt = stmt.where(Song.id.in_(select(eligible_song_ids_from_usage)))
 
     if req.min_match_score is not None:
         stmt = stmt.where(match_expr >= req.min_match_score)

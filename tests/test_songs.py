@@ -2167,3 +2167,99 @@ class TestSongsByTheme(BaseTestHelpers, AuthTestsMixin):
             response = client.post(self.url, json=self._payload())
 
         assert response.status_code == 503
+
+
+class TestSongYouTubeLinks(BaseTestHelpers, AuthTestsMixin):
+    url = "/songs/youtube-links"
+
+    def test_get_youtube_links_success(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity)
+
+        link1 = self._create_youtube_link(db_session, usage, title="Link 1")
+        link2 = self._create_youtube_link(
+            db_session, usage, title="Link 2", is_featured=True
+        )
+
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+        assert response.status_code == 200
+
+        data = response.json()
+        returned_titles = {item["title"] for item in data}
+        assert returned_titles == {link1.title, link2.title}
+
+    def test_youtube_links_empty_list(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+        song = self._create_song(db_session)
+        self._create_usage(db_session, song, activity)
+
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_filter_featured_only(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        activity = self._create_church_activity(db_session, church)
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity)
+
+        self._create_youtube_link(db_session, usage, title="Regular Link")
+        self._create_youtube_link(
+            db_session, usage, title="Featured Link", is_featured=True
+        )
+
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        params = {"is_featured": "true"}
+        url = f"{self.url}?{urlencode(params)}"
+
+        response = client.get(url)
+        assert response.status_code == 200
+
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["title"] == "Featured Link"
+
+    def test_excludes_links_outside_allowed_activity_ids(self, client, db_session):
+        network = self._create_network(db_session)
+        church = self._create_church(db_session, network)
+        allowed_activity = self._create_church_activity(
+            db_session, church, name="Allowed"
+        )
+        disallowed_activity = self._create_church_activity(
+            db_session, church, name="Disallowed"
+        )
+        song = self._create_song(db_session)
+
+        usage_allowed = self._create_usage(db_session, song, allowed_activity)
+        usage_disallowed = self._create_usage(db_session, song, disallowed_activity)
+
+        self._create_youtube_link(db_session, usage_allowed, title="Allowed Link")
+        self._create_youtube_link(db_session, usage_disallowed, title="Disallowed Link")
+
+        user = self._create_user(db_session, self.username, self.password)
+        self._create_church_activity_access(db_session, user, allowed_activity)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self.url)
+        assert response.status_code == 200
+
+        returned_titles = {item["title"] for item in response.json()}
+        assert "Allowed Link" in returned_titles
+        assert "Disallowed Link" not in returned_titles
