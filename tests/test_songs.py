@@ -2371,3 +2371,147 @@ class TestSongYouTubeLinkDetails(BaseTestHelpers, AuthTestsMixin, EditorAuthTest
         response = client.get(self._get_url("notanumber"))
 
         assert response.status_code == 422
+
+
+class TestUpdateSongYouTubeLink(BaseTestHelpers, AuthTestsMixin, EditorAuthTestsMixin):
+    url_template = "/songs/youtube-links/{link_id}"
+    http_method = "put"
+
+    def _get_url(self, link_id: int) -> str:
+        return self.url_template.format(link_id=link_id)
+
+    @property
+    def url(self):
+        return self._get_url(1)
+
+    # Override to support PUT + JSON body for mixins
+    def _request(self, client, url):
+        return client.put(url, json=self._valid_payload())
+
+    def _valid_payload(self, **overrides):
+        payload = {
+            "start_seconds": 10,
+            "end_seconds": 50,
+            "is_featured": True,
+            "description": "Updated description",
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_update_song_youtube_link_success(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        activity = scope.activity
+
+        user = self._create_editor_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity)
+        link = self._create_youtube_link(db_session, usage)
+
+        payload = self._valid_payload()
+
+        response = client.put(self._get_url(link.id), json=payload)
+
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["start_seconds"] == 10
+        assert data["end_seconds"] == 50
+        assert data["is_featured"] is True
+        assert data["description"] == "Updated description"
+
+        db_session.refresh(link)
+        assert link.start_seconds == 10
+        assert link.end_seconds == 50
+        assert link.is_featured is True
+        assert link.description == "Updated description"
+
+    def test_update_song_youtube_link_not_found(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+
+        user = self._create_editor_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        response = client.put(
+            self._get_url(999999),
+            json=self._valid_payload(),
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "YouTube link not found"
+
+    def test_update_song_youtube_link_not_allowed_activity(self, client, db_session):
+        scope_allowed = self._create_single_network_church_and_activity(db_session)
+        scope_denied = self._create_single_network_church_and_activity(db_session)
+
+        network_allowed = scope_allowed.network
+        activity_denied = scope_denied.activity
+
+        user = self._create_editor_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network_allowed)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity_denied)
+        link = self._create_youtube_link(db_session, usage)
+
+        response = client.put(
+            self._get_url(link.id),
+            json=self._valid_payload(),
+        )
+
+        assert response.status_code == 404
+
+    def test_update_song_youtube_link_invalid_seconds(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        activity = scope.activity
+
+        user = self._create_editor_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity)
+        link = self._create_youtube_link(db_session, usage)
+
+        response = client.put(
+            self._get_url(link.id),
+            json=self._valid_payload(start_seconds=50, end_seconds=10),
+        )
+
+        assert response.status_code == 400
+        assert (
+            response.json()["detail"]
+            == "End seconds must be greater than start seconds"
+        )
+
+    def test_update_link_id_validation_error(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+
+        user = self._create_editor_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        response = client.put(
+            self._get_url("notanumber"),
+            json=self._valid_payload(),
+        )
+
+        assert response.status_code == 422

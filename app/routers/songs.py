@@ -34,6 +34,7 @@ from app.schemas.songs import (
     SongYouTubeLinkFilters,
     SongYouTubeLinkWithUsageResponse,
     SongYouTubeLinkSchema,
+    SongYouTubeLinkUpdateSchema
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
 from app.utils.rag import get_embeddings, ExternalServiceError
@@ -263,6 +264,52 @@ def get_song_youtube_link_details(
 
     if not link:
         raise HTTPException(status_code=404, detail="YouTube link not found")
+
+    return link
+
+
+@router.put(
+    "/youtube-links/{link_id}",
+    status_code=200,
+    response_model=SongYouTubeLinkSchema,
+    tags=["songs"],
+    summary="(user:activity) Update song YouTube link details",
+)
+def update_song_youtube_link(
+    payload: SongYouTubeLinkUpdateSchema,
+    link_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.editor)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
+):
+    link = (
+        db.query(SongYouTubeLink)
+        .join(SongYouTubeLink.song_usage)
+        .filter(
+            SongYouTubeLink.id == link_id,
+            SongUsage.church_activity_id.in_(allowed_activity_ids),
+        )
+        .first()
+    )
+
+    if not link:
+        raise HTTPException(status_code=404, detail="YouTube link not found")
+
+    # Validation
+    if payload.end_seconds <= payload.start_seconds:
+        raise HTTPException(
+            status_code=400,
+            detail="End seconds must be greater than start seconds",
+        )
+
+    # Assign new values
+    link.start_seconds = payload.start_seconds
+    link.end_seconds = payload.end_seconds
+    link.is_featured = payload.is_featured
+    link.description = payload.description
+
+    db.commit()
+    db.refresh(link)
 
     return link
 

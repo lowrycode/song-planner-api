@@ -121,6 +121,14 @@ class SongYouTubeLinkFilters(UsageContextFilters):
     is_featured: bool | None = None
 
 
+# Other Request schemas
+class SongYouTubeLinkUpdateSchema(BaseModel):
+    start_seconds: int = Field(..., ge=0)
+    end_seconds: int = Field(..., ge=0)
+    is_featured: bool
+    description: str | None = None
+
+
 # Response Schemas
 class SongBasicDetails(BaseModel):
     id: int
