@@ -83,6 +83,15 @@ class BaseTestHelpers:
         db_session.refresh(user)
         return user
 
+    def _create_editor_user(self, db_session, **kwargs):
+        return self._create_user(
+            db_session,
+            role=UserRole.editor,
+            first_name="Editor",
+            last_name="User",
+            **kwargs,
+        )
+
     def _create_admin_user(self, db_session, **kwargs):
         return self._create_user(
             db_session,
@@ -383,6 +392,44 @@ class AdminAuthTestsMixin:
             username=self.username,
             password=self.password,
             role=UserRole.editor,
+        )
+        self._login(client, self.username, self.password)
+
+        response = self._request(client, self.url)
+        assert response.status_code == 403
+
+
+class EditorAuthTestsMixin:
+    http_method = "get"
+
+    def _request(self, client, url):
+        method = self.http_method.lower()
+        return getattr(client, method)(url)
+
+    def test_editor_user_allowed(self, client, db_session):
+        self._create_editor_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        response = self._request(client, self.url)
+        assert response.status_code != 403
+
+    def test_admin_user_allowed(self, client, db_session):
+        self._create_admin_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._login(client, self.username, self.password)
+
+        response = self._request(client, self.url)
+        assert response.status_code != 403
+
+    def test_normal_user_denied(self, client, db_session):
+        self._create_user(
+            db_session,
+            self.username,
+            self.password,
+            role=UserRole.normal,
         )
         self._login(client, self.username, self.password)
 

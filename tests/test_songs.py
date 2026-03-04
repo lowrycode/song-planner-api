@@ -2,7 +2,7 @@ import os
 from datetime import date, timedelta
 from urllib.parse import urlencode
 from unittest.mock import patch
-from tests.helpers import BaseTestHelpers, AuthTestsMixin
+from tests.helpers import BaseTestHelpers, AuthTestsMixin, EditorAuthTestsMixin
 from app.utils.rag import ExternalServiceError
 
 
@@ -2263,3 +2263,111 @@ class TestSongYouTubeLinks(BaseTestHelpers, AuthTestsMixin):
         returned_titles = {item["title"] for item in response.json()}
         assert "Allowed Link" in returned_titles
         assert "Disallowed Link" not in returned_titles
+
+
+class TestSongYouTubeLinkDetails(BaseTestHelpers, AuthTestsMixin, EditorAuthTestsMixin):
+    url_template = "/songs/youtube-links/{link_id}"
+
+    def _get_url(self, link_id: int) -> str:
+        return self.url_template.format(link_id=link_id)
+
+    @property
+    def url(self):
+        return self._get_url(1)
+
+    def test_get_song_youtube_link_details_success(self, client, db_session):
+        # Setup scope
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+        activity = single_scope.activity
+
+        # Create editor user with network access
+        user = self._create_editor_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        # Create song + usage + link
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity)
+        link = self._create_youtube_link(db_session, usage)
+
+        response = client.get(self._get_url(link.id))
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == link.id
+        assert data["url"] == link.url
+        assert data["title"] == link.title
+        assert data["is_featured"] == link.is_featured
+
+    def test_get_song_youtube_link_details_not_found(self, client, db_session):
+        # Setup scope
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+
+        # Create editor user with network access
+        user = self._create_editor_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        # Use non-existent ID
+        invalid_id = 999999
+        response = client.get(self._get_url(invalid_id))
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "YouTube link not found"
+
+    def test_get_song_youtube_link_details_not_allowed_activity(
+        self, client, db_session
+    ):
+        # Create two separate scopes
+        scope_allowed = self._create_single_network_church_and_activity(db_session)
+        scope_denied = self._create_single_network_church_and_activity(db_session)
+
+        network_allowed = scope_allowed.network
+        activity_denied = scope_denied.activity
+
+        # Create editor user with access ONLY to allowed network
+        user = self._create_editor_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network_allowed)
+        self._login(client, self.username, self.password)
+
+        # Create song + usage + link in DENIED activity
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity_denied)
+        link = self._create_youtube_link(db_session, usage)
+
+        response = client.get(self._get_url(link.id))
+
+        # Because filtering happens in query, this should be 404
+        assert response.status_code == 404
+
+    def test_link_id_validation_error(self, client, db_session):
+        # Setup scope
+        single_scope = self._create_single_network_church_and_activity(db_session)
+        network = single_scope.network
+
+        # Create editor user with network access
+        user = self._create_editor_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self._get_url("notanumber"))
+
+        assert response.status_code == 422

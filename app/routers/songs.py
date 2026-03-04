@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy import select, func, cast, Numeric, and_
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
@@ -33,6 +33,7 @@ from app.schemas.songs import (
     SongThemeSearchResponse,
     SongYouTubeLinkFilters,
     SongYouTubeLinkWithUsageResponse,
+    SongYouTubeLinkSchema,
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
 from app.utils.rag import get_embeddings, ExternalServiceError
@@ -235,6 +236,35 @@ def get_song_youtube_links(
         )
         for link in links
     ]
+
+
+@router.get(
+    "/youtube-links/{link_id}",
+    status_code=200,
+    response_model=SongYouTubeLinkSchema,
+    tags=["songs"],
+    summary="(user:activity) Retrieve single song YouTube link details",
+)
+def get_song_youtube_link_details(
+    link_id: int = Path(..., gt=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.editor)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
+):
+    link = (
+        db.query(SongYouTubeLink)
+        .join(SongYouTubeLink.song_usage)
+        .filter(
+            SongYouTubeLink.id == link_id,
+            SongUsage.church_activity_id.in_(allowed_activity_ids),
+        )
+        .first()
+    )
+
+    if not link:
+        raise HTTPException(status_code=404, detail="YouTube link not found")
+
+    return link
 
 
 @router.get(
