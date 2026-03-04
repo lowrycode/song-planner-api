@@ -34,7 +34,8 @@ from app.schemas.songs import (
     SongYouTubeLinkFilters,
     SongYouTubeLinkWithUsageResponse,
     SongYouTubeLinkSchema,
-    SongYouTubeLinkUpdateSchema
+    SongYouTubeLinkUpdateSchema,
+    UsageContextFilters,
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
 from app.utils.rag import get_embeddings, ExternalServiceError
@@ -493,80 +494,6 @@ def list_songs_with_usage_summary(
     return list(result.values())
 
 
-@router.get(
-    "/{song_id}",
-    status_code=200,
-    response_model=SongFullDetails,
-    tags=["songs"],
-    summary="(public) Retrieve song details without usage data",
-)
-def song_full_details(
-    song_id: int,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_min_role(UserRole.normal)),
-):
-    song = (
-        db.query(Song)
-        .options(
-            joinedload(Song.lyrics).joinedload(SongLyrics.themes),
-            joinedload(Song.resources),
-        )
-        .filter(Song.id == song_id)
-        .first()
-    )
-
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
-
-    # Inject theme content as 'themes' attribute for Pydantic schema
-    if song.lyrics and song.lyrics.themes:
-        setattr(song, "themes", song.lyrics.themes.content)
-    else:
-        setattr(song, "themes", None)
-
-    return song
-
-
-@router.get(
-    "/{song_id}/usages",
-    status_code=200,
-    response_model=list[SongUsageSchema],
-    tags=["songs"],
-    summary="(user:activity) List song usages for specified song",
-)
-def song_usages(
-    song_id: int,
-    filters: Annotated[SongUsageFilters, Query()],
-    db: Session = Depends(get_db),
-    user: User = Depends(require_min_role(UserRole.normal)),
-    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
-):
-
-    # Ensure song exists
-    if not db.query(Song.id).filter_by(id=song_id).first():
-        raise HTTPException(status_code=404, detail="Song not found")
-
-    effective_activity_ids = get_effective_activity_ids(
-        allowed_activity_ids=allowed_activity_ids,
-        filter_activity_ids=filters.church_activity_id,
-    )
-
-    if not effective_activity_ids:
-        return []
-
-    usage_filters = build_song_usage_filters(
-        effective_activity_ids=effective_activity_ids,
-        from_date=filters.from_date,
-        to_date=filters.to_date,
-    )
-
-    query = (
-        db.query(SongUsage).filter(SongUsage.song_id == song_id).filter(*usage_filters)
-    )
-
-    return query.all()
-
-
 @router.post(
     "/by-theme",
     response_model=list[SongThemeSearchResponse],
@@ -663,3 +590,140 @@ def get_songs_by_theme(
 
     results = db.execute(stmt).all()
     return results
+
+
+@router.get(
+    "/{song_id}",
+    status_code=200,
+    response_model=SongFullDetails,
+    tags=["songs"],
+    summary="(public) Retrieve song details without usage data",
+)
+def song_full_details(
+    song_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+):
+    song = (
+        db.query(Song)
+        .options(
+            joinedload(Song.lyrics).joinedload(SongLyrics.themes),
+            joinedload(Song.resources),
+        )
+        .filter(Song.id == song_id)
+        .first()
+    )
+
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    # Inject theme content as 'themes' attribute for Pydantic schema
+    if song.lyrics and song.lyrics.themes:
+        setattr(song, "themes", song.lyrics.themes.content)
+    else:
+        setattr(song, "themes", None)
+
+    return song
+
+
+@router.get(
+    "/{song_id}/youtube-links/best",
+    response_model=SongYouTubeLinkWithUsageResponse,
+    tags=["songs"],
+    summary="(user:activity) Retrieve best song YouTube link",
+)
+def get_best_song_youtube_link(
+    song_id: int,
+    filters: Annotated[UsageContextFilters, Query()],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
+):
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filters.church_activity_id,
+    )
+
+    if not effective_activity_ids:
+        raise HTTPException(status_code=404, detail="YouTube link not found")
+
+    base_query = (
+        db.query(SongYouTubeLink)
+        .join(SongYouTubeLink.song_usage)
+        .filter(
+            SongUsage.song_id == song_id,
+            SongUsage.church_activity_id.in_(effective_activity_ids),
+        )
+    )
+
+    if filters.from_date is not None:
+        base_query = base_query.filter(SongUsage.used_date >= filters.from_date)
+
+    if filters.to_date is not None:
+        base_query = base_query.filter(SongUsage.used_date <= filters.to_date)
+
+    link = (
+        base_query
+        .order_by(
+            SongYouTubeLink.is_featured.desc(),
+            SongUsage.used_date.desc(),
+        )
+        .first()
+    )
+
+    if not link:
+        raise HTTPException(status_code=404, detail="YouTube link not found")
+
+    return SongYouTubeLinkWithUsageResponse(
+        id=link.id,
+        url=link.url,
+        start_seconds=link.start_seconds,
+        end_seconds=link.end_seconds,
+        is_featured=link.is_featured,
+        title=link.title,
+        description=link.description,
+        thumbnail_key=link.thumbnail_key,
+        usage_id=link.song_usage_id,
+        used_date=link.song_usage.used_date,
+        church_activity_id=link.song_usage.church_activity_id,
+    )
+
+
+@router.get(
+    "/{song_id}/usages",
+    status_code=200,
+    response_model=list[SongUsageSchema],
+    tags=["songs"],
+    summary="(user:activity) List song usages for specified song",
+)
+def song_usages(
+    song_id: int,
+    filters: Annotated[SongUsageFilters, Query()],
+    db: Session = Depends(get_db),
+    user: User = Depends(require_min_role(UserRole.normal)),
+    allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
+):
+
+    # Ensure song exists
+    if not db.query(Song.id).filter_by(id=song_id).first():
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    effective_activity_ids = get_effective_activity_ids(
+        allowed_activity_ids=allowed_activity_ids,
+        filter_activity_ids=filters.church_activity_id,
+    )
+
+    if not effective_activity_ids:
+        return []
+
+    usage_filters = build_song_usage_filters(
+        effective_activity_ids=effective_activity_ids,
+        from_date=filters.from_date,
+        to_date=filters.to_date,
+    )
+
+    query = (
+        db.query(SongUsage).filter(SongUsage.song_id == song_id).filter(*usage_filters)
+    )
+
+    return query.all()

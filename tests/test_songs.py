@@ -2515,3 +2515,297 @@ class TestUpdateSongYouTubeLink(BaseTestHelpers, AuthTestsMixin, EditorAuthTests
         )
 
         assert response.status_code == 422
+
+
+class TestBestSongYouTubeLink(BaseTestHelpers, AuthTestsMixin):
+    url_template = "/songs/{song_id}/youtube-links/best"
+
+    def _get_url(self, song_id: int, query: str = "") -> str:
+        base = self.url_template.format(song_id=song_id)
+        return f"{base}?{query}" if query else base
+
+    @property
+    def url(self):
+        return self._get_url(1)
+
+    def test_get_best_song_youtube_link_featured_wins(self, client, db_session):
+        # Setup scope
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        activity = scope.activity
+
+        # Create normal user with network access
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        # Create song
+        song = self._create_song(db_session)
+
+        # Older non-featured
+        usage_old = self._create_usage(
+            db_session, song, activity, date.today() - timedelta(days=7)
+        )
+        link_featured = self._create_youtube_link(
+            db_session,
+            usage_old,
+            is_featured=True,
+        )
+
+        # Newer featured
+        usage_new = self._create_usage(db_session, song, activity, date.today())
+        self._create_youtube_link(
+            db_session,
+            usage_new,
+            is_featured=False,
+        )
+
+        response = client.get(self._get_url(song.id))
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == link_featured.id
+        assert data["is_featured"] is True
+
+    def test_get_best_song_youtube_link_most_recent_if_no_featured(
+        self, client, db_session
+    ):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        activity = scope.activity
+
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        # Older
+        usage_old = self._create_usage(
+            db_session, song, activity, date.today() - timedelta(days=7)
+        )
+        self._create_youtube_link(
+            db_session,
+            usage_old,
+            is_featured=False,
+        )
+
+        # Newer
+        usage_new = self._create_usage(db_session, song, activity, date.today())
+        link_new = self._create_youtube_link(
+            db_session,
+            usage_new,
+            is_featured=False,
+        )
+
+        response = client.get(self._get_url(song.id))
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["id"] == link_new.id
+        assert data["is_featured"] is False
+
+    def test_get_best_song_youtube_link_not_found(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        response = client.get(self._get_url(song.id))
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "YouTube link not found"
+
+    def test_get_best_song_youtube_link_not_allowed_activity(self, client, db_session):
+        # Allowed scope
+        scope_allowed = self._create_single_network_church_and_activity(db_session)
+
+        # Denied scope
+        scope_denied = self._create_single_network_church_and_activity(db_session)
+
+        network_allowed = scope_allowed.network
+        activity_denied = scope_denied.activity
+
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network_allowed)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+        usage = self._create_usage(db_session, song, activity_denied)
+        self._create_youtube_link(db_session, usage)
+
+        response = client.get(self._get_url(song.id))
+
+        # Should behave as if not found
+        assert response.status_code == 404
+
+    def test_song_id_validation_error(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+
+        user = self._create_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        response = client.get(self._get_url("notanumber"))
+
+        assert response.status_code == 422
+
+    def test_filter_by_church_activity_id(self, client, db_session):
+        # Setup two separate scopes
+        scope1 = self._create_single_network_church_and_activity(db_session)
+        scope2 = self._create_single_network_church_and_activity(db_session)
+
+        network = scope1.network
+        activity1 = scope1.activity
+        activity2 = scope2.activity
+
+        # Create normal user with access to network1
+        user = self._create_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        # Create song
+        song = self._create_song(db_session)
+
+        # Links in different activities
+        usage1 = self._create_usage(db_session, song, activity1)
+        link1 = self._create_youtube_link(db_session, usage1, is_featured=True)
+
+        usage2 = self._create_usage(db_session, song, activity2)
+        self._create_youtube_link(db_session, usage2, is_featured=True)
+
+        # Query with both activity IDs
+        query = f"church_activity_id={activity1.id}&church_activity_id={activity2.id}"
+        response = client.get(self._get_url(song.id, query))
+        assert response.status_code == 200
+        data = response.json()
+        # Should only return the link from allowed activity1
+        assert data["id"] == link1.id
+
+    def test_filter_by_from_date(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        activity = scope.activity
+
+        user = self._create_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        # Older link
+        usage_old = self._create_usage(
+            db_session, song, activity, date.today() - timedelta(days=7)
+        )
+        self._create_youtube_link(db_session, usage_old, is_featured=True)
+
+        # Newer link
+        usage_new = self._create_usage(db_session, song, activity, date.today())
+        link_new = self._create_youtube_link(db_session, usage_new, is_featured=True)
+
+        query = f"from_date={date.today().isoformat()}"
+        response = client.get(self._get_url(song.id, query))
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == link_new.id
+
+    def test_filter_by_to_date(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        activity = scope.activity
+
+        user = self._create_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        # Older link
+        usage_old = self._create_usage(
+            db_session, song, activity, date.today() - timedelta(days=7)
+        )
+        link_old = self._create_youtube_link(db_session, usage_old, is_featured=True)
+
+        # Newer link
+        usage_new = self._create_usage(db_session, song, activity, date.today())
+        self._create_youtube_link(db_session, usage_new, is_featured=True)
+
+        query = f"to_date={(date.today() - timedelta(days=7)).isoformat()}"
+        response = client.get(self._get_url(song.id, query))
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == link_old.id
+
+    def test_combined_filters(self, client, db_session):
+        # Setup two activities
+        scope1 = self._create_single_network_church_and_activity(db_session)
+        scope2 = self._create_single_network_church_and_activity(db_session)
+
+        network = scope1.network
+        activity1 = scope1.activity
+        activity2 = scope2.activity
+
+        user = self._create_user(
+            db_session, username=self.username, password=self.password
+        )
+        self._create_network_access(db_session, user, network)
+        self._login(client, self.username, self.password)
+
+        song = self._create_song(db_session)
+
+        # Older non-featured link in allowed activity1
+        usage_old = self._create_usage(
+            db_session, song, activity1, date.today() - timedelta(days=7)
+        )
+        self._create_youtube_link(db_session, usage_old, is_featured=False)
+
+        # Newer featured link in allowed activity1
+        usage_new = self._create_usage(db_session, song, activity1, date.today())
+        link_featured = self._create_youtube_link(
+            db_session, usage_new, is_featured=True
+        )
+
+        # Link in denied activity2
+        usage_other = self._create_usage(db_session, song, activity2, date.today())
+        self._create_youtube_link(db_session, usage_other, is_featured=True)
+
+        query = (
+            f"church_activity_id={activity1.id}&church_activity_id={activity2.id}"
+            f"&from_date={date.today().isoformat()}"
+        )
+        response = client.get(self._get_url(song.id, query))
+        assert response.status_code == 200
+        data = response.json()
+        # Should pick featured link from allowed activity1
+        assert data["id"] == link_featured.id
