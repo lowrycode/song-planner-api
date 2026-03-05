@@ -6,6 +6,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.database import Base, get_db
+from app.dependencies import get_cron_allowed_church_activity_ids
+
 
 load_dotenv()
 TEST_DB_URL = os.getenv("TEST_DB_URL")
@@ -23,7 +25,8 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
 
 
-# Provide a fresh database session for each test inside a transaction that is rolled back
+# Provide a fresh database session for each test inside a transaction
+# that is rolled back
 @pytest.fixture(scope="function")
 def db_session():
     connection = engine.connect()
@@ -41,12 +44,23 @@ def db_session():
 @pytest.fixture(scope="function")
 def client(db_session):
     def _get_test_db():
-        try:
-            yield db_session
-        finally:
-            pass
+        yield db_session
 
     app.dependency_overrides[get_db] = _get_test_db
+
     with TestClient(app) as c:
         yield c
-    app.dependency_overrides.clear()
+
+    app.dependency_overrides.pop(get_db, None)
+
+
+# Override get_cron_allowed_church_activity_ids
+@pytest.fixture
+def allow_cron_activities():
+    def _override(activity_ids):
+        app.dependency_overrides[get_cron_allowed_church_activity_ids] = (
+            lambda: activity_ids
+        )
+
+    yield _override
+    app.dependency_overrides.pop(get_cron_allowed_church_activity_ids, None)

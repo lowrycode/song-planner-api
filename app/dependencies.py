@@ -1,4 +1,5 @@
-from fastapi import Depends, HTTPException, status, Cookie
+import secrets
+from fastapi import Depends, Header, HTTPException, status, Cookie
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -12,6 +13,7 @@ from app.models import (
     ChurchActivity,
 )
 from app.utils.auth import verify_access_token
+from app.settings import settings
 
 
 # --- Authentication ---
@@ -52,6 +54,19 @@ def get_current_user(
         )
 
     return user
+
+
+def require_cron_api_key(x_api_key: str = Header(None)):
+    """
+    Validate API key sent via X-API-Key header.
+    """
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="Missing API key")
+
+    cron_api_key = settings.CRON_API_KEY
+
+    if not secrets.compare_digest(x_api_key, cron_api_key):
+        raise HTTPException(status_code=403, detail="Invalid API key")
 
 
 # --- Authorization ---
@@ -106,5 +121,23 @@ def get_allowed_church_activity_ids(
     ).all()
 
     allowed_activity_ids.update(direct_activity_ids)
+
+    return allowed_activity_ids
+
+
+def get_cron_allowed_church_activity_ids(db: Session = Depends(get_db)):
+    """Returns a set of allowed church activity ids for the cron user"""
+
+    CRON_NETWORK_IDS = [1]
+
+    allowed_activity_ids = set()
+
+    if CRON_NETWORK_IDS:
+        activities_from_networks = db.scalars(
+            select(ChurchActivity.id)
+            .join(Church, Church.id == ChurchActivity.church_id)
+            .where(Church.network_id.in_(CRON_NETWORK_IDS))
+        ).all()
+        allowed_activity_ids.update(activities_from_networks)
 
     return allowed_activity_ids

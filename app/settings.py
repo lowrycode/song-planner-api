@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     API_BIBLE_URL: str
     API_BIBLE_TOKEN: str
+    CRON_API_KEY: str
 
     model_config = {
         "extra": "ignore",  # to allow for other variables in .env (e.g. test_db_url)
