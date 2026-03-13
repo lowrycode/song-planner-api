@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from app.models import UserRole
-from app.schemas.auth import UsernameBase
+from app.schemas.auth import UsernameBase, PasswordBase
 from app.schemas.networks import NetworkSchema, ChurchSchema
 
 
@@ -31,8 +31,8 @@ class AdminUserUpdateRequest(UserUpdateRequest):
     church_id: int
 
 
-class AdminResetPasswordRequest(BaseModel):
-    new_password: str
+class AdminResetPasswordRequest(PasswordBase):
+    pass
 
 
 # Response Schemas

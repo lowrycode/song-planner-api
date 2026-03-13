@@ -1609,7 +1609,7 @@ class TestResetUserPassword(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         old_password = user.hashed_password
 
         url = self._get_url(user_id=user.id)
-        response = client.put(url, json={"new_password": "new_password_123"})
+        response = client.put(url, json={"password": "new_password_123"})
 
         # Check API response
         assert response.status_code == 200
@@ -1636,7 +1636,7 @@ class TestResetUserPassword(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         self._login(client, self.username, self.password)
 
         response = client.put(
-            self._get_url(user_id=9999), json={"new_password": "new_password_123"}
+            self._get_url(user_id=9999), json={"password": "new_password_123"}
         )
 
         assert response.status_code == 404
@@ -1669,7 +1669,7 @@ class TestResetUserPassword(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin
         )
 
         response = client.put(
-            self._get_url(user_id=user.id), json={"new_password": "new_password_123"}
+            self._get_url(user_id=user.id), json={"password": "new_password_123"}
         )
 
         assert response.status_code == 403

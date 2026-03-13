@@ -735,7 +735,7 @@ def reset_user_password(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     # Hash the new password and update
-    user.hashed_password = hash_password(body.new_password)
+    user.hashed_password = hash_password(body.password)
     db.commit()
 
     return {"message": "Password reset successfully"}
