@@ -20,12 +20,14 @@ from app.schemas.users import (
     UserAccountResponse,
     UserUpdateRequest,
     AdminUserUpdateRequest,
+    AdminResetPasswordRequest,
     NetworkAccess,
     ChurchAccess,
     ChurchActivityAccess,
     AllAccessResponse,
 )
 from app.dependencies import require_min_role
+from app.utils.auth import hash_password
 
 router = APIRouter()
 
@@ -693,3 +695,47 @@ def delete_user(
 
     db.delete(user)
     db.commit()
+
+
+@router.put(
+    "/{user_id}/password",
+    status_code=status.HTTP_200_OK,
+    tags=["users"],
+    summary="(admin:network) Reset user password",
+)
+def reset_user_password(
+    user_id: int,
+    body: AdminResetPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_min_role(UserRole.admin)),
+):
+    """
+    Reset the password for a user within the admin's network.
+
+    Args:
+        user_id (int): The ID of the user whose password is being reset.
+        body (AdminResetPasswordRequest): The request body containing the new password.
+        db (Session): The database session.
+        current_user (User): The authenticated admin user performing the reset.
+
+    Raises:
+        HTTPException:
+            - 404 if the user does not exist.
+            - 403 if the admin is not in the same network as the user.
+
+    Returns:
+        dict: A message indicating success.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check if admin is in the same network
+    if current_user.network_id != user.network_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    # Hash the new password and update
+    user.hashed_password = hash_password(body.new_password)
+    db.commit()
+
+    return {"message": "Password reset successfully"}

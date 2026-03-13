@@ -31,6 +31,10 @@ class AdminUserUpdateRequest(UserUpdateRequest):
     church_id: int
 
 
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str
+
+
 # Response Schemas
 class GrantNetworkAccessResponse(GrantAccessBaseResponse):
     network_id: int

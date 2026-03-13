@@ -1336,9 +1336,7 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
             db_session, username="regular_user", password="password"
         )
 
-        network = self._create_network(
-            db_session, name="Network 1", slug="network-1"
-        )
+        network = self._create_network(db_session, name="Network 1", slug="network-1")
         church = self._create_church(
             db_session, network=network, name="Church 1", slug="church-1"
         )
@@ -1423,12 +1421,8 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert len(data["church_activities"]) == 1
 
     def test_forbidden_if_admin_different_network(self, client, db_session):
-        network1 = self._create_network(
-            db_session, name="Network 1", slug="network-1"
-        )
-        network2 = self._create_network(
-            db_session, name="Network 2", slug="network-2"
-        )
+        network1 = self._create_network(db_session, name="Network 1", slug="network-1")
+        network2 = self._create_network(db_session, name="Network 2", slug="network-2")
 
         church1 = self._create_church(
             db_session, network=network1, name="Church 1", slug="church-1"
@@ -1491,16 +1485,10 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert response.json()["detail"] == "User not found"
 
     def test_get_all_access_network_only(self, client, db_session):
-        user = self._create_user(
-            db_session, username="user", password="password"
-        )
-        network = self._create_network(
-            db_session, name="Network 1", slug="network-1"
-        )
+        user = self._create_user(db_session, username="user", password="password")
+        network = self._create_network(db_session, name="Network 1", slug="network-1")
 
-        db_session.add(
-            UserNetworkAccess(user_id=user.id, network_id=network.id)
-        )
+        db_session.add(UserNetworkAccess(user_id=user.id, network_id=network.id))
         db_session.commit()
 
         self._login(client, user.username, "password")
@@ -1517,9 +1505,7 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert data["church_activities"] == []
 
     def test_get_all_access_network_and_church_only(self, client, db_session):
-        user = self._create_user(
-            db_session, username="user", password="password"
-        )
+        user = self._create_user(db_session, username="user", password="password")
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
 
@@ -1547,17 +1533,13 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert data["church_activities"] == []
 
     def test_get_all_access_activity_only(self, client, db_session):
-        user = self._create_user(
-            db_session, username="user", password="password"
-        )
+        user = self._create_user(db_session, username="user", password="password")
         network = self._create_network(db_session)
         church = self._create_church(db_session, network)
         activity = self._create_church_activity(db_session, church)
 
         db_session.add(
-            UserChurchActivityAccess(
-                user_id=user.id, church_activity_id=activity.id
-            )
+            UserChurchActivityAccess(user_id=user.id, church_activity_id=activity.id)
         )
         db_session.commit()
 
@@ -1575,9 +1557,7 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert data["church_activities"][0]["church_activity_id"] == activity.id
 
     def test_get_all_access_empty(self, client, db_session):
-        user = self._create_user(
-            db_session, username="user", password="password"
-        )
+        user = self._create_user(db_session, username="user", password="password")
 
         self._login(client, user.username, "password")
 
@@ -1589,3 +1569,108 @@ class TestGetAllAccessForUser(BaseTestHelpers, AuthTestsMixin):
         assert data["networks"] == []
         assert data["churches"] == []
         assert data["church_activities"] == []
+
+
+class TestResetUserPassword(BaseTestHelpers, AuthTestsMixin, AdminAuthTestsMixin):
+    url_template = "/users/{user_id}/password"
+    http_method = "put"  # override variable in AdminAuthTestsMixin
+
+    def _get_url(self, user_id: int) -> str:
+        return self.url_template.format(user_id=user_id)
+
+    @property  # used for authentication mixins only
+    def url(self):
+        return self._get_url(user_id=1)
+
+    def test_reset_password_success(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        church = scope.church
+
+        # Create admin user and login
+        admin = self._create_admin_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            network=network,
+            church=church,
+        )
+        self._login(client, self.username, self.password)
+
+        # Create user in same network
+        user = self._create_user(
+            db_session,
+            username="regular_user",
+            password="regular_password",
+            network=admin.network,
+            church=admin.church,
+        )
+
+        old_password = user.hashed_password
+
+        url = self._get_url(user_id=user.id)
+        response = client.put(url, json={"new_password": "new_password_123"})
+
+        # Check API response
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Password reset successfully"
+
+        # Check database - password should be updated
+        db_session.refresh(user)
+        assert user.hashed_password != old_password
+
+    def test_reset_password_user_not_found(self, client, db_session):
+        scope = self._create_single_network_church_and_activity(db_session)
+        network = scope.network
+        church = scope.church
+
+        # Create admin user and login
+        self._create_admin_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            network=network,
+            church=church,
+        )
+        self._login(client, self.username, self.password)
+
+        response = client.put(
+            self._get_url(user_id=9999), json={"new_password": "new_password_123"}
+        )
+
+        assert response.status_code == 404
+        assert response.json()["detail"] == "User not found"
+
+    def test_reset_password_admin_different_network(self, client, db_session):
+        scope = self._create_multi_network_churches_and_activities(db_session)
+        admin_network = scope.network1
+        admin_church = scope.church1
+        other_network = scope.network2
+        other_church = scope.church2
+
+        # Create admin in network 1
+        self._create_admin_user(
+            db_session,
+            username=self.username,
+            password=self.password,
+            network=admin_network,
+            church=admin_church,
+        )
+        self._login(client, self.username, self.password)
+
+        # Create user in different network
+        user = self._create_user(
+            db_session,
+            username="regular_user",
+            password="regular_password",
+            network=other_network,
+            church=other_church,
+        )
+
+        response = client.put(
+            self._get_url(user_id=user.id), json={"new_password": "new_password_123"}
+        )
+
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Forbidden"
