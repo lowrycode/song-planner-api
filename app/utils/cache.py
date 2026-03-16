@@ -1,11 +1,16 @@
 import hashlib
 import json
+import time
 import logging
+import redis
 from typing import Any, Callable
 from app.services.redis import redis_client
 
 
 logger = logging.getLogger(__name__)
+
+# Circuit breaker state
+CIRCUIT_OPEN_UNTIL = 0
 
 
 def _normalize(value: Any):
@@ -54,21 +59,33 @@ def build_cache_key(prefix: str, **kwargs) -> str:
 
 
 def cache_get(key: str):
-    if redis_client is None:
+    global CIRCUIT_OPEN_UNTIL
+    if redis_client is None or time.time() < CIRCUIT_OPEN_UNTIL:
         return None
 
-    value = redis_client.get(key)
-    if value is None:
+    try:
+        value = redis_client.get(key)
+        if value is None:
+            return None
+        return json.loads(value)
+    except (redis.RedisError, redis.ConnectionError, redis.TimeoutError) as e:
+        CIRCUIT_OPEN_UNTIL = time.time() + 30
+        logger.warning("Redis GET failed: %s", e)
         return None
-    return json.loads(value)
 
 
 def cache_set(key: str, value, ttl: int = 300):
-    if redis_client is None:
+    global CIRCUIT_OPEN_UNTIL
+    if redis_client is None or time.time() < CIRCUIT_OPEN_UNTIL:
         return None
 
-    value_json = json.dumps(value, default=str)
-    redis_client.set(key, value_json, ex=ttl)
+    try:
+        value_json = json.dumps(value, default=str)
+        redis_client.set(key, value_json, ex=ttl)
+    except (redis.RedisError, redis.ConnectionError, redis.TimeoutError) as e:
+        CIRCUIT_OPEN_UNTIL = time.time() + 30
+        logger.warning("Redis SET failed: %s", e)
+        return None
 
 
 def cache_get_or_set(key: str, fn: Callable[[], Any], ttl: int = 3600):
