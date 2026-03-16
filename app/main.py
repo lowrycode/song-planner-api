@@ -1,7 +1,7 @@
 import os
 import logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="[%(levelname)s] %(name)s: %(message)s",
 )
 from fastapi import FastAPI
