@@ -1,4 +1,9 @@
 import os
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="[%(levelname)s] %(name)s: %(message)s",
+)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
