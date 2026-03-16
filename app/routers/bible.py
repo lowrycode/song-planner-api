@@ -12,6 +12,7 @@ from app.schemas.bible import (
 from app.models import UserRole, User
 from app.settings import settings
 from app.utils.rag import generate_themes_from_bible_text, ExternalServiceError
+from app.utils.cache import build_cache_key, cache_get_or_set
 
 
 router = APIRouter()
@@ -23,45 +24,59 @@ router = APIRouter()
     tags=["bible"],
     summary="Retrieve Bible passage",
 )
-async def bible_passage(
+def bible_passage(
     query: Annotated[BiblePassageRequest, Query()],
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
-    params = {
-        "q": query.ref,
-        "indent-poetry": False,
-        "include-headings": False,
-        "include-footnotes": False,
-        "include-verse-numbers": False,
-        "include-short-copyright": False,
-        "include-passage-references": False,
-    }
 
-    headers = {"Authorization": f"Token {settings.API_BIBLE_TOKEN}"}
+    cache_key = build_cache_key(
+        "bible:passage",
+        ref=query.ref.lower().strip(),
+    )
 
-    try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get(
-                settings.API_BIBLE_URL, params=params, headers=headers
-            )
-    except httpx.RequestError:
-        raise HTTPException(status_code=502, detail="Bible service unavailable")
+    def fetch_passage():
+        params = {
+            "q": query.ref,
+            "indent-poetry": False,
+            "include-headings": False,
+            "include-footnotes": False,
+            "include-verse-numbers": False,
+            "include-short-copyright": False,
+            "include-passage-references": False,
+        }
 
-    if response.status_code == 404:
-        raise HTTPException(404, "Passage not found")
+        headers = {"Authorization": f"Token {settings.API_BIBLE_TOKEN}"}
 
-    if not response.is_success:
-        raise HTTPException(502, "Bible API request failed")
-    data = response.json()
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.get(
+                    settings.API_BIBLE_URL,
+                    params=params,
+                    headers=headers,
+                )
+        except httpx.RequestError:
+            raise HTTPException(status_code=502, detail="Bible service unavailable")
 
-    try:
-        raw_text = data["passages"][0]
-    except (KeyError, IndexError):
-        raise HTTPException(status_code=404, detail="Passage not found")
+        if response.status_code == 404:
+            raise HTTPException(404, "Passage not found")
 
-    text = re.sub(r"\s+", " ", raw_text).strip()
+        if not response.is_success:
+            raise HTTPException(502, "Bible API request failed")
 
-    return BiblePassageResponse(text=text)
+        data = response.json()
+
+        try:
+            raw_text = data["passages"][0]
+        except (KeyError, IndexError):
+            raise HTTPException(status_code=404, detail="Passage not found")
+
+        text = re.sub(r"\s+", " ", raw_text).strip()
+
+        return {"text": text}
+
+    data = cache_get_or_set(cache_key, fetch_passage, ttl=86400)
+
+    return BiblePassageResponse(**data)
 
 
 @router.post(
@@ -74,10 +89,24 @@ def generate_bible_themes(
     body: GenerateThemesRequest,
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
-    try:
-        themes = generate_themes_from_bible_text(body.text)
-    except ExternalServiceError as exc:
-        # Upstream failure → 502 Bad Gateway
-        raise HTTPException(status_code=502, detail="Theme generation failed") from exc
 
-    return GenerateThemesResponse(themes=themes)
+    cache_key = build_cache_key(
+        "bible:themes",
+        text=body.text,
+    )
+
+    def run_generation():
+        try:
+            themes = generate_themes_from_bible_text(body.text)
+        except ExternalServiceError as exc:
+            # Upstream failure → 502 Bad Gateway
+            raise HTTPException(
+                status_code=502,
+                detail="Theme generation failed",
+            ) from exc
+
+        return {"themes": themes}
+
+    data = cache_get_or_set(cache_key, run_generation, ttl=86400)
+
+    return GenerateThemesResponse(**data)
