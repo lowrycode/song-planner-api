@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.database import Base, get_db
 from app.dependencies import get_cron_allowed_church_activity_ids
+from unittest.mock import patch
 
 
 load_dotenv()
@@ -14,6 +15,13 @@ TEST_DB_URL = os.getenv("TEST_DB_URL")
 
 engine = create_engine(TEST_DB_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+# Disable caching during tests
+@pytest.fixture(autouse=True)
+def disable_redis():
+    with patch("app.utils.cache.redis_client", None):
+        yield
 
 
 # Create tables once before the test session

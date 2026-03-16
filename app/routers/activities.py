@@ -13,6 +13,7 @@ from app.schemas.songs import (
     SongCountByActivityFilters,
 )
 from app.dependencies import require_min_role, get_allowed_church_activity_ids
+from app.utils.cache import build_cache_key, cache_get_or_set
 
 
 router = APIRouter()
@@ -23,9 +24,7 @@ router = APIRouter()
     status_code=200,
     response_model=list[ChurchActivitySchema],
     tags=["activities"],
-    summary=(
-        "(user:activity) Lists church activities"
-    ),
+    summary="(user:activity) Lists church activities",
 )
 def list_viewable_church_activities(
     db: Session = Depends(get_db),
@@ -33,12 +32,22 @@ def list_viewable_church_activities(
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
 
-    query = (
-        db.query(ChurchActivity)
-        .filter(ChurchActivity.id.in_(allowed_activity_ids))
-        .order_by(ChurchActivity.name.asc())
+    cache_key = build_cache_key(
+        "church_activities:viewable",
+        allowed_ids=sorted(allowed_activity_ids),
     )
-    return query.all()
+
+    def run_query():
+        query = (
+            db.query(ChurchActivity)
+            .filter(ChurchActivity.id.in_(allowed_activity_ids))
+            .order_by(ChurchActivity.name.asc())
+        )
+        return [
+            ChurchActivitySchema.model_validate(c).model_dump() for c in query.all()
+        ]
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.get(

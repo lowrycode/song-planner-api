@@ -45,7 +45,10 @@ from app.utils.songs import (
     build_song_usage_stats_filters,
     build_song_filters,
     resolve_usage_filtered_song_ids,
+    MAX_USAGE_DATE,
+    MIN_USAGE_DATE,
 )
+from app.utils.cache import build_cache_key, cache_get_or_set
 
 
 router = APIRouter()
@@ -71,8 +74,20 @@ def list_songs(
         lyric=filter_query.lyric,
     )
 
-    query = db.query(Song).filter(*song_filters).order_by(func.lower(Song.first_line))
-    return query.all()
+    cache_key = build_cache_key(
+        "songs:list",
+        song_key=filter_query.song_key,
+        song_type=filter_query.song_type,
+        lyric=filter_query.lyric,
+    )
+
+    def run_query():
+        query = (
+            db.query(Song).filter(*song_filters).order_by(func.lower(Song.first_line))
+        )
+        return [SongBasicDetails.model_validate(s).model_dump() for s in query.all()]
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.get(
@@ -96,10 +111,12 @@ def song_keys_overview(
     )
 
     # Usage Filters
+    from_date = filter_query.from_date or MIN_USAGE_DATE
+    to_date = filter_query.to_date or MAX_USAGE_DATE
     usage_filters = build_song_usage_filters(
         effective_activity_ids=effective_activity_ids,
-        from_date=filter_query.from_date,
-        to_date=filter_query.to_date,
+        from_date=from_date,
+        to_date=to_date,
     )
 
     # Unique filter
@@ -120,9 +137,19 @@ def song_keys_overview(
         .order_by(count_expr.desc())
     )
 
-    results = query.all()
-    response = {song_key: count for song_key, count in results}
-    return response
+    cache_key = build_cache_key(
+        "songs:keys_overview",
+        activities=effective_activity_ids,
+        from_date=from_date,
+        to_date=to_date,
+        unique=filter_query.unique,
+    )
+
+    def run_query():
+        results = query.all()
+        return {song_key: count for song_key, count in results}
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.get(
@@ -145,37 +172,54 @@ def song_type_overview(
         filter_activity_ids=filter_query.church_activity_id,
     )
 
+    if not effective_activity_ids:
+        return {"hymn": 0, "song": 0}
+
     # Usage Filters
+    from_date = filter_query.from_date or MIN_USAGE_DATE
+    to_date = filter_query.to_date or MAX_USAGE_DATE
     usage_filters = build_song_usage_filters(
         effective_activity_ids=effective_activity_ids,
-        from_date=filter_query.from_date,
-        to_date=filter_query.to_date,
+        from_date=from_date,
+        to_date=to_date,
     )
 
-    # Unique filter
     count_expr = (
         func.count(func.distinct(SongUsage.song_id))
         if filter_query.unique
         else func.count(SongUsage.id)
     )
 
-    results = (
-        db.query(
-            Song.is_hymn,
-            count_expr.label("count"),
-        )
-        .join(SongUsage.song)
-        .filter(*usage_filters)
-        .group_by(Song.is_hymn)
-        .order_by(count_expr.desc())
+    cache_key = build_cache_key(
+        "songs:types_overview",
+        activities=effective_activity_ids,
+        from_date=from_date,
+        to_date=to_date,
+        unique=filter_query.unique,
     )
 
-    counts = {"hymn": 0, "song": 0}
-    for is_hymn, count in results:
-        key = "hymn" if is_hymn else "song"
-        counts[key] = count
+    def run_query():
+        results = (
+            db.query(
+                Song.is_hymn,
+                count_expr.label("count"),
+            )
+            .join(SongUsage.song)
+            .filter(*usage_filters)
+            .group_by(Song.is_hymn)
+            .order_by(count_expr.desc())
+            .all()
+        )
 
-    return counts
+        counts = {"hymn": 0, "song": 0}
+
+        for is_hymn, count in results:
+            key = "hymn" if is_hymn else "song"
+            counts[key] = count
+
+        return counts
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.get(
@@ -191,7 +235,6 @@ def get_song_youtube_links(
     user: User = Depends(require_min_role(UserRole.normal)),
     allowed_activity_ids: set[int] = Depends(get_allowed_church_activity_ids),
 ):
-    # Resolve effective activity IDs
     effective_activity_ids = get_effective_activity_ids(
         allowed_activity_ids=allowed_activity_ids,
         filter_activity_ids=filters.church_activity_id,
@@ -200,44 +243,56 @@ def get_song_youtube_links(
     if not effective_activity_ids:
         return []
 
-    # Base query
-    query = (
-        db.query(SongYouTubeLink)
-        .join(SongYouTubeLink.song_usage)
-        .filter(SongUsage.church_activity_id.in_(effective_activity_ids))
+    from_date = filters.from_date or MIN_USAGE_DATE
+    to_date = filters.to_date or MAX_USAGE_DATE
+
+    cache_key = build_cache_key(
+        "songs:youtube_links",
+        activities=effective_activity_ids,
+        song_id=filters.song_id,
+        from_date=from_date,
+        to_date=to_date,
+        is_featured=filters.is_featured,
     )
 
-    # Optional filters
-    if filters.song_id is not None:
-        query = query.filter(SongUsage.song_id == filters.song_id)
+    def run_query():
 
-    if filters.from_date is not None:
-        query = query.filter(SongUsage.used_date >= filters.from_date)
-
-    if filters.to_date is not None:
-        query = query.filter(SongUsage.used_date <= filters.to_date)
-
-    if filters.is_featured is not None:
-        query = query.filter(SongYouTubeLink.is_featured == filters.is_featured)
-
-    links = query.all()
-
-    return [
-        SongYouTubeLinkWithUsageResponse(
-            id=link.id,
-            url=link.url,
-            start_seconds=link.start_seconds,
-            end_seconds=link.end_seconds,
-            is_featured=link.is_featured,
-            title=link.title,
-            description=link.description,
-            thumbnail_key=link.thumbnail_key,
-            usage_id=link.song_usage_id,
-            used_date=link.song_usage.used_date,
-            church_activity_id=link.song_usage.church_activity_id,
+        query = (
+            db.query(SongYouTubeLink)
+            .join(SongYouTubeLink.song_usage)
+            .filter(SongUsage.church_activity_id.in_(effective_activity_ids))
         )
-        for link in links
-    ]
+
+        # Optional filters
+        if filters.song_id is not None:
+            query = query.filter(SongUsage.song_id == filters.song_id)
+
+        query = query.filter(SongUsage.used_date >= from_date)
+        query = query.filter(SongUsage.used_date <= to_date)
+
+        if filters.is_featured is not None:
+            query = query.filter(SongYouTubeLink.is_featured == filters.is_featured)
+
+        links = query.all()
+
+        return [
+            SongYouTubeLinkWithUsageResponse(
+                id=link.id,
+                url=link.url,
+                start_seconds=link.start_seconds,
+                end_seconds=link.end_seconds,
+                is_featured=link.is_featured,
+                title=link.title,
+                description=link.description,
+                thumbnail_key=link.thumbnail_key,
+                usage_id=link.song_usage_id,
+                used_date=link.song_usage.used_date,
+                church_activity_id=link.song_usage.church_activity_id,
+            ).model_dump()
+            for link in links
+        ]
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.get(
@@ -432,66 +487,85 @@ def list_songs_with_usage_summary(
     # Sort alphabetical
     query = query.order_by(func.lower(Song.first_line))
 
-    # Query DB
-    rows = query.all()
+    # Build cache key
+    from_date = filter_query.from_date or MIN_USAGE_DATE
+    to_date = filter_query.to_date or MAX_USAGE_DATE
 
-    # Format response
-    result: dict[int, SongListUsageResponse] = {}
+    cache_key = build_cache_key(
+        "songs:usage_summary",
+        activities=effective_activity_ids,
+        from_date=from_date,
+        to_date=to_date,
+        song_key=filter_query.song_key,
+        song_type=filter_query.song_type,
+        lyric=filter_query.lyric,
+        first_used_in_range=filter_query.first_used_in_range,
+        last_used_in_range=filter_query.last_used_in_range,
+        used_in_range=filter_query.used_in_range,
+    )
 
-    for r in rows:
-        if r.song_id not in result:
-            result[r.song_id] = SongListUsageResponse(
-                id=r.song_id,
-                first_line=r.first_line,
-                activities={},
-                overall=OverallActivityUsageStats(
-                    usage_count=r.total_usage_count or 0,
-                    first_used=None,
-                    last_used=None,
-                ),
-            )
-        song = result[r.song_id]
+    # Run Query Function
+    def run_query():
 
-        if r.activity_slug:
-            song.activities[r.activity_slug] = ActivityUsageStats(
-                id=r.activity_id,
-                name=r.activity_name,
-                usage_count=r.activity_usage_count or 0,
-                first_used=r.first_used,
-                last_used=r.last_used,
-            )
+        rows = query.all()
 
-            # Update overall first/last used
-            if song.overall.first_used is None or (
-                r.first_used and r.first_used < song.overall.first_used
-            ):
-                song.overall.first_used = r.first_used
+        result: dict[int, SongListUsageResponse] = {}
 
-            if song.overall.last_used is None or (
-                r.last_used and r.last_used > song.overall.last_used
-            ):
-                song.overall.last_used = r.last_used
-
-    # Fill missing activities with zero usage
-    activity_map = {
-        e.id: (e.slug, e.name)
-        for e in db.query(ChurchActivity).filter(
-            ChurchActivity.id.in_(effective_activity_ids)
-        )
-    }
-
-    for song in result.values():
-        for activity_id, (slug, name) in activity_map.items():
-            if slug not in song.activities:
-                song.activities[slug] = ActivityUsageStats(
-                    id=activity_id,
-                    name=name,
-                    usage_count=0,
-                    first_used=None,
-                    last_used=None,
+        for r in rows:
+            if r.song_id not in result:
+                result[r.song_id] = SongListUsageResponse(
+                    id=r.song_id,
+                    first_line=r.first_line,
+                    activities={},
+                    overall=OverallActivityUsageStats(
+                        usage_count=r.total_usage_count or 0,
+                        first_used=None,
+                        last_used=None,
+                    ),
                 )
 
-    return list(result.values())
+            song = result[r.song_id]
+
+            if r.activity_slug:
+                song.activities[r.activity_slug] = ActivityUsageStats(
+                    id=r.activity_id,
+                    name=r.activity_name,
+                    usage_count=r.activity_usage_count or 0,
+                    first_used=r.first_used,
+                    last_used=r.last_used,
+                )
+
+                if song.overall.first_used is None or (
+                    r.first_used and r.first_used < song.overall.first_used
+                ):
+                    song.overall.first_used = r.first_used
+
+                if song.overall.last_used is None or (
+                    r.last_used and r.last_used > song.overall.last_used
+                ):
+                    song.overall.last_used = r.last_used
+
+        activity_map = {
+            e.id: (e.slug, e.name)
+            for e in db.query(ChurchActivity).filter(
+                ChurchActivity.id.in_(effective_activity_ids)
+            )
+        }
+
+        for song in result.values():
+            for activity_id, (slug, name) in activity_map.items():
+                if slug not in song.activities:
+                    song.activities[slug] = ActivityUsageStats(
+                        id=activity_id,
+                        name=name,
+                        usage_count=0,
+                        first_used=None,
+                        last_used=None,
+                    )
+
+        return [s.model_dump() for s in result.values()]
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.post(
@@ -604,26 +678,35 @@ def song_full_details(
     db: Session = Depends(get_db),
     user: User = Depends(require_min_role(UserRole.normal)),
 ):
-    song = (
-        db.query(Song)
-        .options(
-            joinedload(Song.lyrics).joinedload(SongLyrics.themes),
-            joinedload(Song.resources),
-        )
-        .filter(Song.id == song_id)
-        .first()
+
+    cache_key = build_cache_key(
+        "songs:full_details",
+        song_id=song_id,
     )
 
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+    def run_query():
 
-    # Inject theme content as 'themes' attribute for Pydantic schema
-    if song.lyrics and song.lyrics.themes:
-        setattr(song, "themes", song.lyrics.themes.content)
-    else:
-        setattr(song, "themes", None)
+        song = (
+            db.query(Song)
+            .options(
+                joinedload(Song.lyrics).joinedload(SongLyrics.themes),
+                joinedload(Song.resources),
+            )
+            .filter(Song.id == song_id)
+            .first()
+        )
 
-    return song
+        if not song:
+            raise HTTPException(status_code=404, detail="Song not found")
+
+        if song.lyrics and song.lyrics.themes:
+            setattr(song, "themes", song.lyrics.themes.content)
+        else:
+            setattr(song, "themes", None)
+
+        return SongFullDetails.model_validate(song).model_dump()
+
+    return cache_get_or_set(cache_key, run_query, ttl=3600)
 
 
 @router.get(
@@ -662,14 +745,10 @@ def get_best_song_youtube_link(
     if filters.to_date is not None:
         base_query = base_query.filter(SongUsage.used_date <= filters.to_date)
 
-    link = (
-        base_query
-        .order_by(
-            SongYouTubeLink.is_featured.desc(),
-            SongUsage.used_date.desc(),
-        )
-        .first()
-    )
+    link = base_query.order_by(
+        SongYouTubeLink.is_featured.desc(),
+        SongUsage.used_date.desc(),
+    ).first()
 
     if not link:
         raise HTTPException(status_code=404, detail="YouTube link not found")
@@ -716,14 +795,29 @@ def song_usages(
     if not effective_activity_ids:
         return []
 
+    from_date = filters.from_date or MIN_USAGE_DATE
+    to_date = filters.to_date or MAX_USAGE_DATE
+
     usage_filters = build_song_usage_filters(
         effective_activity_ids=effective_activity_ids,
-        from_date=filters.from_date,
-        to_date=filters.to_date,
+        from_date=from_date,
+        to_date=to_date,
     )
 
     query = (
         db.query(SongUsage).filter(SongUsage.song_id == song_id).filter(*usage_filters)
     )
 
-    return query.all()
+    cache_key = build_cache_key(
+        "songs:usage_summary",
+        song_id=song_id,
+        activities=effective_activity_ids,
+        from_date=from_date,
+        to_date=to_date,
+    )
+
+    return cache_get_or_set(
+        cache_key,
+        lambda: [SongUsageSchema.model_validate(r).model_dump() for r in query.all()],
+        ttl=3600,
+    )

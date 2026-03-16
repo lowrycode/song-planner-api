@@ -19,3 +19,4 @@ google-genai
 # for tests and async API requests
 httpx
 pytest-httpx
+redis
