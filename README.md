@@ -33,6 +33,7 @@ A key design goal of the API is to **enforce access control and data restriction
 - **JWT (python-jose / pyjwt)**: Authentication tokens
 - **Argon2 + bcrypt**: Secure password hashing
 - **pytest + httpx**: Test-driven development and API testing
+- **Redis**: Caching layer for performance optimisation
 - **Gunicorn**: Production application server
 - **Google Cloud Run**: Backend hosting
 - **Render**: Backend hosting (in development)
@@ -181,6 +182,12 @@ GEN_SUMMARY_MODEL=gemini-2.5-flash-lite
 # Bible API
 API_BIBLE_URL=<bible_api_url>
 API_BIBLE_TOKEN=<bible_api_key>
+
+# Redis Caching
+CACHE_ENABLED=true
+UPSTASH_REDIS_URL=<redis_url>  # For production (Upstash)
+LOCAL_REDIS_HOST=localhost     # For local development
+LOCAL_REDIS_PORT=6379          # For local development
 ```
 
 No secrets are committed to the repository.
@@ -212,7 +219,3 @@ If using a different PostgreSQL instance, run the following SQL to enable the ex
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-
-## Planned Improvements
-
-- Introduce Redis caching for frequently requested analytics queries, AI-generated summaries, and external Bible API responses
