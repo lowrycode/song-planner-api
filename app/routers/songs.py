@@ -48,7 +48,7 @@ from app.utils.songs import (
     MAX_USAGE_DATE,
     MIN_USAGE_DATE,
 )
-from app.utils.cache import build_cache_key, cache_get_or_set
+from app.utils.cache import build_cache_key, cache_get_or_set, cache_delete_prefix
 
 
 router = APIRouter()
@@ -366,6 +366,9 @@ def update_song_youtube_link(
 
     db.commit()
     db.refresh(link)
+
+    # Broad invalidation for song youtube links (can't reproduce exact key):
+    cache_delete_prefix("songs:youtube_links")
 
     return link
 

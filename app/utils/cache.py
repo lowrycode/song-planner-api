@@ -105,3 +105,53 @@ def cache_get_or_set(key: str, fn: Callable[[], Any], ttl: int = 3600):
     cache_set(key, value, ttl)
 
     return value
+
+
+def cache_delete(prefix: str, **kwargs) -> bool:
+    """
+    Generates a cache key using the same logic as build_cache_key
+    and deletes it from Redis.
+    """
+    global CIRCUIT_OPEN_UNTIL
+    if redis_client is None or time.time() < CIRCUIT_OPEN_UNTIL:
+        return False
+
+    key = build_cache_key(prefix, **kwargs)
+
+    try:
+        # Returns True if key existed and was deleted, False otherwise
+        return bool(redis_client.delete(key))
+    except (redis.RedisError, redis.ConnectionError, redis.TimeoutError) as e:
+        CIRCUIT_OPEN_UNTIL = time.time() + 30
+        logger.warning("Redis DELETE failed: %s", e)
+        return False
+
+
+def cache_delete_prefix(prefix: str) -> int:
+    """
+    Deletes all keys starting with the given prefix.
+    Returns the number of keys deleted.
+    """
+    global CIRCUIT_OPEN_UNTIL
+    if redis_client is None or time.time() < CIRCUIT_OPEN_UNTIL:
+        return 0
+
+    count = 0
+    try:
+        # SCAN is safer for production than KEYS *
+        cursor = 0
+        while True:
+            cursor, keys = redis_client.scan(
+                cursor=cursor, match=f"{prefix}*", count=100
+            )
+            if keys:
+                redis_client.delete(*keys)
+                count += len(keys)
+            if cursor == 0:
+                break
+        logger.info(f"Purged {count} keys with prefix: {prefix}")
+        return count
+    except (redis.RedisError, redis.ConnectionError, redis.TimeoutError) as e:
+        CIRCUIT_OPEN_UNTIL = time.time() + 30
+        logger.warning("Redis prefix DELETE failed: %s", e)
+        return 0
